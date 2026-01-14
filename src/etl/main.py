@@ -43,13 +43,6 @@ def main():
 
     print("✅ range upsert ok ->", table)
 
-    print("rows:", len(df))
-    if len(df) > 0:
-        print("sample nmids:", df["nmid"].head(5).tolist())
-
-        supabase_upsert_df(supabase, table, df, batch=500)
-        print("✅ upsert ok ->", table)
-
 
 if __name__ == "__main__":
     main()
