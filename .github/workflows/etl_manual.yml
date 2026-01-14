@@ -3,6 +3,18 @@ name: ETL Manual
 on:
   workflow_dispatch:
 
+env:
+  RUN_ADVERTS_SETTINGS: "1"
+  RUN_ADVERTS_FULLSTATS: "1"
+  RUN_SALES_FUNNEL: "1"
+
+  ADVERTS_STATUSES: "7,9,11"
+  FULLSTATS_STATUSES: "9,11"
+  FULLSTATS_CHUNK_SIZE: "50"
+  FULLSTATS_SLEEP_SECONDS: "21"
+  OVERLAP_DAYS: "2"
+  SLEEP_SECONDS: "21"
+    
 jobs:
   run:
     runs-on: ubuntu-latest
