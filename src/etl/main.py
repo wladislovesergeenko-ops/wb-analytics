@@ -26,13 +26,15 @@ def main():
     run_adverts_settings = os.getenv("RUN_ADVERTS_SETTINGS", "1") == "1"
     run_sales_funnel = os.getenv("RUN_SALES_FUNNEL", "1") == "1"
     run_adverts_fullstats = os.getenv("RUN_ADVERTS_FULLSTATS", "0") == "1"
-    
+    run_spp = os.getenv("RUN_SPP", "0") == "1"
+
     # 4) PARAMS
     table = os.getenv("SALES_FUNNEL_TABLE", "wb_sales_funnel_products")
     fullstats_sleep = int(os.getenv("FULLSTATS_SLEEP_SECONDS", "15"))
     fullstats_chunk = int(os.getenv("FULLSTATS_CHUNK_SIZE", "50"))
     overlap_days = int(os.getenv("OVERLAP_DAYS", "2"))
     sleep_seconds = int(os.getenv("SLEEP_SECONDS", "21"))
+    spp_overlap_days = int(os.getenv("SPP_OVERLAP_DAYS", "1"))
 
     date_to = dt.date.today() - dt.timedelta(days=1)          # вчера
     date_from = date_to - dt.timedelta(days=overlap_days)     # overlap
@@ -73,8 +75,18 @@ def main():
             sleep_seconds=sleep_seconds,
             verbose=True,
         )
-
         print("✅ range upsert ok ->", table)
+
+    if run_spp:
+        from .spp_snapshot import load_spp_snapshot_yesterday  # имя файла поправь на своё
+        load_spp_snapshot_yesterday(
+            wb_key=wb_key,
+            supabase=supabase,
+            overlap_days=spp_overlap_days,
+            verbose=True,
+        )
+
+        
 
 
 if __name__ == "__main__":
