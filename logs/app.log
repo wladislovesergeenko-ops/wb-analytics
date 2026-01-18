@@ -1,0 +1,106 @@
+2026-01-18 18:10:41 [INFO    ] src.connectors.ozon.OzonConnector: [ozon] Ozon connector initialized with Client ID: 461435...
+2026-01-18 18:10:41 [INFO    ] src.connectors.ozon.OzonConnector: [ozon] Validating connection...
+2026-01-18 18:10:42 [INFO    ] src.connectors.ozon.OzonConnector: [ozon] Connection validated successfully
+2026-01-18 18:10:42 [INFO    ] src.connectors.ozon.OzonConnector: [ozon] Fetching analytics data: 2026-01-08 -> 2026-01-14, metrics=['revenue', 'ordered_units'], dimensions=['day', 'sku'], limit=10, offset=0
+2026-01-18 18:10:42 [INFO    ] src.connectors.ozon.OzonConnector: [ozon] Fetched 10 analytics records
+2026-01-18 18:28:31 [INFO    ] src.connectors.ozon.OzonConnector: [ozon] Ozon connector initialized with Client ID: 461435...
+2026-01-18 18:28:31 [INFO    ] src.connectors.ozon.OzonConnector: [ozon] Fetching analytics data: 2026-01-08 -> 2026-01-14, metrics=['revenue', 'ordered_units', 'delivered_units', 'hits_view_search', 'hits_view_pdp', 'hits_view', 'hits_tocart_search', 'hits_tocart_pdp', 'hits_tocart', 'session_view_search', 'session_view_pdp', 'session_view', 'position_category'], dimensions=['day', 'sku'], limit=1000, offset=0
+2026-01-18 18:28:31 [INFO    ] src.connectors.ozon.OzonConnector: [ozon] Fetched 377 analytics records
+2026-01-18 18:30:53 [INFO    ] src.connectors.ozon.OzonConnector: [ozon] Ozon connector initialized with Client ID: 461435...
+2026-01-18 18:30:53 [INFO    ] src.connectors.ozon.OzonConnector: [ozon] Fetching analytics data: 2026-01-08 -> 2026-01-14, metrics=['revenue', 'ordered_units', 'delivered_units', 'hits_view_search', 'hits_view_pdp', 'hits_view', 'hits_tocart_search', 'hits_tocart_pdp', 'hits_tocart', 'session_view_search', 'session_view_pdp', 'session_view', 'position_category'], dimensions=['day', 'sku'], limit=1000, offset=0
+2026-01-18 18:30:53 [INFO    ] src.connectors.ozon.OzonConnector: [ozon] Fetched 377 analytics records
+2026-01-18 18:41:18 [INFO    ] src.connectors.ozon.OzonConnector: [ozon] Ozon connector initialized with Client ID: 461435...
+2026-01-18 18:41:18 [INFO    ] src.connectors.ozon.OzonConnector: [ozon] Fetching analytics data: 2026-01-08 -> 2026-01-14, metrics=['revenue', 'ordered_units', 'delivered_units', 'hits_view_search', 'hits_view_pdp', 'hits_view', 'hits_tocart_search', 'hits_tocart_pdp', 'hits_tocart', 'session_view_search', 'session_view_pdp', 'session_view', 'position_category'], dimensions=['day', 'sku'], limit=1000, offset=0
+2026-01-18 18:41:19 [INFO    ] src.connectors.ozon.OzonConnector: [ozon] Fetched 377 analytics records
+2026-01-18 18:47:51 [INFO    ] src.connectors.ozon.OzonConnector: [ozon] Ozon connector initialized with Client ID: 461435...
+2026-01-18 18:47:51 [INFO    ] src.connectors.ozon.OzonConnector: [ozon] Fetching analytics data: 2026-01-01 -> 2026-01-17, metrics=['revenue', 'ordered_units', 'delivered_units', 'hits_view_search', 'hits_view_pdp', 'hits_view', 'hits_tocart_search', 'hits_tocart_pdp', 'hits_tocart', 'session_view_search', 'session_view_pdp', 'session_view', 'position_category'], dimensions=['day', 'sku'], limit=1000, offset=0
+2026-01-18 18:47:52 [INFO    ] src.connectors.ozon.OzonConnector: [ozon] Fetched 916 analytics records
+2026-01-18 19:09:34 [INFO    ] src.connectors.ozon_performance.OzonPerformanceConnector: [ozon_performance] Ozon Performance connector initialized
+2026-01-18 19:09:34 [INFO    ] src.connectors.ozon_performance.OzonPerformanceConnector: [ozon_performance] Validating Performance API connection...
+2026-01-18 19:09:34 [INFO    ] src.connectors.ozon_performance.OzonPerformanceConnector: [ozon_performance] Requesting new access token...
+2026-01-18 19:09:36 [INFO    ] src.connectors.ozon_performance.OzonPerformanceConnector: [ozon_performance] Access token obtained, expires in 1800s
+2026-01-18 19:09:36 [INFO    ] src.connectors.ozon_performance.OzonPerformanceConnector: [ozon_performance] Fetching campaigns...
+2026-01-18 19:09:38 [INFO    ] src.connectors.ozon_performance.OzonPerformanceConnector: [ozon_performance] Fetched 250 campaigns
+2026-01-18 19:09:38 [INFO    ] src.connectors.ozon_performance.OzonPerformanceConnector: [ozon_performance] Connection validated successfully
+2026-01-18 19:09:38 [INFO    ] src.connectors.ozon_performance.OzonPerformanceConnector: [ozon_performance] Fetching campaigns...
+2026-01-18 19:09:39 [INFO    ] src.connectors.ozon_performance.OzonPerformanceConnector: [ozon_performance] Fetched 250 campaigns
+2026-01-18 19:09:39 [INFO    ] src.connectors.ozon_performance.OzonPerformanceConnector: [ozon_performance] Fetching campaign product stats: 1 campaigns, 2026-01-11 -> 2026-01-18
+2026-01-18 19:09:40 [WARNING ] src.utils.retry: Attempt 1/3 failed in fetch_campaign_product_stats. Retrying in 5.0s... Error: Client error '405 Method Not Allowed' for url 'https://api-performance.ozon.ru/api/client/statistics/campaign/product'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/405
+2026-01-18 19:09:45 [INFO    ] src.connectors.ozon_performance.OzonPerformanceConnector: [ozon_performance] Fetching campaign product stats: 1 campaigns, 2026-01-11 -> 2026-01-18
+2026-01-18 19:09:45 [WARNING ] src.utils.retry: Attempt 2/3 failed in fetch_campaign_product_stats. Retrying in 5.0s... Error: Client error '405 Method Not Allowed' for url 'https://api-performance.ozon.ru/api/client/statistics/campaign/product'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/405
+2026-01-18 19:09:50 [INFO    ] src.connectors.ozon_performance.OzonPerformanceConnector: [ozon_performance] Fetching campaign product stats: 1 campaigns, 2026-01-11 -> 2026-01-18
+2026-01-18 19:09:51 [ERROR   ] src.utils.retry: Failed after 3 attempts in fetch_campaign_product_stats: Client error '405 Method Not Allowed' for url 'https://api-performance.ozon.ru/api/client/statistics/campaign/product'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/405
+Traceback (most recent call last):
+  File "/Users/wladislove/Desktop/tests/wb api/wb-analytics/src/utils/retry.py", line 41, in wrapper
+    return func(*args, **kwargs)
+  File "/Users/wladislove/Desktop/tests/wb api/wb-analytics/src/connectors/ozon_performance.py", line 154, in fetch_campaign_product_stats
+    response.raise_for_status()
+    ~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "/Users/wladislove/Desktop/tests/wb api/wb-analytics/.venv/lib/python3.13/site-packages/httpx/_models.py", line 763, in raise_for_status
+    raise HTTPStatusError(message, request=request, response=self)
+httpx.HTTPStatusError: Client error '405 Method Not Allowed' for url 'https://api-performance.ozon.ru/api/client/statistics/campaign/product'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/405
+2026-01-18 19:21:50 [INFO    ] src.connectors.ozon_performance.OzonPerformanceConnector: [ozon_performance] Ozon Performance connector initialized
+2026-01-18 19:21:50 [INFO    ] src.connectors.ozon_performance.OzonPerformanceConnector: [ozon_performance] Validating Performance API connection...
+2026-01-18 19:21:50 [INFO    ] src.connectors.ozon_performance.OzonPerformanceConnector: [ozon_performance] Requesting new access token...
+2026-01-18 19:21:50 [INFO    ] src.connectors.ozon_performance.OzonPerformanceConnector: [ozon_performance] Access token obtained, expires in 1800s
+2026-01-18 19:21:50 [INFO    ] src.connectors.ozon_performance.OzonPerformanceConnector: [ozon_performance] Fetching campaigns...
+2026-01-18 19:21:51 [INFO    ] src.connectors.ozon_performance.OzonPerformanceConnector: [ozon_performance] Fetched 250 campaigns
+2026-01-18 19:21:51 [INFO    ] src.connectors.ozon_performance.OzonPerformanceConnector: [ozon_performance] Connection validated successfully
+2026-01-18 19:21:51 [INFO    ] src.connectors.ozon_performance.OzonPerformanceConnector: [ozon_performance] Fetching campaigns...
+2026-01-18 19:21:52 [INFO    ] src.connectors.ozon_performance.OzonPerformanceConnector: [ozon_performance] Fetched 250 campaigns
+2026-01-18 19:21:52 [INFO    ] src.connectors.ozon_performance.OzonPerformanceConnector: [ozon_performance] Creating statistics report: 1 campaigns, 2026-01-11 -> 2026-01-17
+2026-01-18 19:21:54 [INFO    ] src.connectors.ozon_performance.OzonPerformanceConnector: [ozon_performance] Report created, UUID: 48141a84-b086-4152-b89c-165508d58638
+2026-01-18 19:21:54 [INFO    ] src.connectors.ozon_performance.OzonPerformanceConnector: [ozon_performance] Report 48141a84-b086-4152-b89c-165508d58638 state: NOT_STARTED
+2026-01-18 19:22:05 [INFO    ] src.connectors.ozon_performance.OzonPerformanceConnector: [ozon_performance] Report 48141a84-b086-4152-b89c-165508d58638 state: OK
+2026-01-18 19:22:05 [INFO    ] src.connectors.ozon_performance.OzonPerformanceConnector: [ozon_performance] Downloading report 48141a84-b086-4152-b89c-165508d58638...
+2026-01-18 19:22:05 [INFO    ] src.connectors.ozon_performance.OzonPerformanceConnector: [ozon_performance] Report downloaded, size: 2609 bytes
+2026-01-18 19:24:42 [INFO    ] src.connectors.ozon_performance.OzonPerformanceConnector: [ozon_performance] Ozon Performance connector initialized
+2026-01-18 19:24:42 [INFO    ] src.connectors.ozon_performance.OzonPerformanceConnector: [ozon_performance] Requesting new access token...
+2026-01-18 19:24:43 [INFO    ] src.connectors.ozon_performance.OzonPerformanceConnector: [ozon_performance] Access token obtained, expires in 1800s
+2026-01-18 19:24:43 [INFO    ] src.connectors.ozon_performance.OzonPerformanceConnector: [ozon_performance] Fetching campaigns...
+2026-01-18 19:24:44 [INFO    ] src.connectors.ozon_performance.OzonPerformanceConnector: [ozon_performance] Fetched 250 campaigns
+2026-01-18 19:24:44 [INFO    ] src.connectors.ozon_performance.OzonPerformanceConnector: [ozon_performance] Creating statistics report: 1 campaigns, 2026-01-11 -> 2026-01-17
+2026-01-18 19:24:45 [INFO    ] src.connectors.ozon_performance.OzonPerformanceConnector: [ozon_performance] Report created, UUID: c5014242-4c01-4756-b819-f4a30f022592
+2026-01-18 19:24:45 [INFO    ] src.connectors.ozon_performance.OzonPerformanceConnector: [ozon_performance] Report c5014242-4c01-4756-b819-f4a30f022592 state: NOT_STARTED
+2026-01-18 19:24:57 [INFO    ] src.connectors.ozon_performance.OzonPerformanceConnector: [ozon_performance] Report c5014242-4c01-4756-b819-f4a30f022592 state: OK
+2026-01-18 19:24:57 [INFO    ] src.connectors.ozon_performance.OzonPerformanceConnector: [ozon_performance] Downloading report c5014242-4c01-4756-b819-f4a30f022592...
+2026-01-18 19:24:58 [INFO    ] src.connectors.ozon_performance.OzonPerformanceConnector: [ozon_performance] Report downloaded, size: 2609 bytes
+2026-01-18 19:28:34 [INFO    ] src.connectors.ozon_performance.OzonPerformanceConnector: [ozon_performance] Ozon Performance connector initialized
+2026-01-18 19:28:34 [INFO    ] src.connectors.ozon_performance.OzonPerformanceConnector: [ozon_performance] Requesting new access token...
+2026-01-18 19:28:37 [INFO    ] src.connectors.ozon_performance.OzonPerformanceConnector: [ozon_performance] Access token obtained, expires in 1800s
+2026-01-18 19:28:37 [INFO    ] src.connectors.ozon_performance.OzonPerformanceConnector: [ozon_performance] Fetching campaigns...
+2026-01-18 19:28:38 [INFO    ] src.connectors.ozon_performance.OzonPerformanceConnector: [ozon_performance] Fetched 250 campaigns
+2026-01-18 19:28:38 [INFO    ] src.connectors.ozon_performance.OzonPerformanceConnector: [ozon_performance] Creating statistics report: 10 campaigns, 2025-12-19 -> 2026-01-17
+2026-01-18 19:28:41 [INFO    ] src.connectors.ozon_performance.OzonPerformanceConnector: [ozon_performance] Report created, UUID: d4ea91e2-b32b-4f74-a021-70b072bdab3a
+2026-01-18 19:28:42 [INFO    ] src.connectors.ozon_performance.OzonPerformanceConnector: [ozon_performance] Report d4ea91e2-b32b-4f74-a021-70b072bdab3a state: IN_PROGRESS
+2026-01-18 19:28:55 [INFO    ] src.connectors.ozon_performance.OzonPerformanceConnector: [ozon_performance] Report d4ea91e2-b32b-4f74-a021-70b072bdab3a state: OK
+2026-01-18 19:28:55 [INFO    ] src.connectors.ozon_performance.OzonPerformanceConnector: [ozon_performance] Downloading report d4ea91e2-b32b-4f74-a021-70b072bdab3a...
+2026-01-18 19:28:56 [INFO    ] src.connectors.ozon_performance.OzonPerformanceConnector: [ozon_performance] Report downloaded, size: 13684 bytes
+2026-01-18 19:29:00 [INFO    ] src.connectors.ozon_performance.OzonPerformanceConnector: [ozon_performance] Creating statistics report: 10 campaigns, 2025-12-19 -> 2026-01-17
+2026-01-18 19:29:01 [INFO    ] src.connectors.ozon_performance.OzonPerformanceConnector: [ozon_performance] Report created, UUID: 0eafbbda-079c-48ee-a344-ea2a4be9c994
+2026-01-18 19:29:01 [INFO    ] src.connectors.ozon_performance.OzonPerformanceConnector: [ozon_performance] Report 0eafbbda-079c-48ee-a344-ea2a4be9c994 state: NOT_STARTED
+2026-01-18 19:29:12 [INFO    ] src.connectors.ozon_performance.OzonPerformanceConnector: [ozon_performance] Report 0eafbbda-079c-48ee-a344-ea2a4be9c994 state: OK
+2026-01-18 19:29:12 [INFO    ] src.connectors.ozon_performance.OzonPerformanceConnector: [ozon_performance] Downloading report 0eafbbda-079c-48ee-a344-ea2a4be9c994...
+2026-01-18 19:29:13 [INFO    ] src.connectors.ozon_performance.OzonPerformanceConnector: [ozon_performance] Report downloaded, size: 14360 bytes
+2026-01-18 19:29:14 [INFO    ] src.connectors.ozon_performance.OzonPerformanceConnector: [ozon_performance] Creating statistics report: 10 campaigns, 2025-12-19 -> 2026-01-17
+2026-01-18 19:29:18 [INFO    ] src.connectors.ozon_performance.OzonPerformanceConnector: [ozon_performance] Report created, UUID: 0ff21af6-c78a-4acb-b6f0-a62314c46bf8
+2026-01-18 19:29:20 [INFO    ] src.connectors.ozon_performance.OzonPerformanceConnector: [ozon_performance] Report 0ff21af6-c78a-4acb-b6f0-a62314c46bf8 state: NOT_STARTED
+2026-01-18 19:29:32 [INFO    ] src.connectors.ozon_performance.OzonPerformanceConnector: [ozon_performance] Report 0ff21af6-c78a-4acb-b6f0-a62314c46bf8 state: OK
+2026-01-18 19:29:32 [INFO    ] src.connectors.ozon_performance.OzonPerformanceConnector: [ozon_performance] Downloading report 0ff21af6-c78a-4acb-b6f0-a62314c46bf8...
+2026-01-18 19:29:43 [INFO    ] src.connectors.ozon_performance.OzonPerformanceConnector: [ozon_performance] Report downloaded, size: 14373 bytes
+2026-01-18 19:29:51 [INFO    ] src.connectors.ozon_performance.OzonPerformanceConnector: [ozon_performance] Creating statistics report: 10 campaigns, 2025-12-19 -> 2026-01-17
+2026-01-18 19:29:52 [INFO    ] src.connectors.ozon_performance.OzonPerformanceConnector: [ozon_performance] Report created, UUID: fcd8ba35-ef0b-4d38-8b5c-910cb683c993
+2026-01-18 19:29:52 [INFO    ] src.connectors.ozon_performance.OzonPerformanceConnector: [ozon_performance] Report fcd8ba35-ef0b-4d38-8b5c-910cb683c993 state: NOT_STARTED
+2026-01-18 19:30:04 [INFO    ] src.connectors.ozon_performance.OzonPerformanceConnector: [ozon_performance] Report fcd8ba35-ef0b-4d38-8b5c-910cb683c993 state: OK
+2026-01-18 19:30:04 [INFO    ] src.connectors.ozon_performance.OzonPerformanceConnector: [ozon_performance] Downloading report fcd8ba35-ef0b-4d38-8b5c-910cb683c993...
+2026-01-18 19:30:06 [INFO    ] src.connectors.ozon_performance.OzonPerformanceConnector: [ozon_performance] Report downloaded, size: 14298 bytes
+2026-01-18 19:30:14 [INFO    ] src.connectors.ozon_performance.OzonPerformanceConnector: [ozon_performance] Creating statistics report: 8 campaigns, 2025-12-19 -> 2026-01-17
+2026-01-18 19:30:17 [INFO    ] src.connectors.ozon_performance.OzonPerformanceConnector: [ozon_performance] Report created, UUID: 4b3a173f-75fd-4a70-8130-c9e5f36dcf15
+2026-01-18 19:30:17 [INFO    ] src.connectors.ozon_performance.OzonPerformanceConnector: [ozon_performance] Report 4b3a173f-75fd-4a70-8130-c9e5f36dcf15 state: NOT_STARTED
+2026-01-18 19:30:28 [INFO    ] src.connectors.ozon_performance.OzonPerformanceConnector: [ozon_performance] Report 4b3a173f-75fd-4a70-8130-c9e5f36dcf15 state: OK
+2026-01-18 19:30:28 [INFO    ] src.connectors.ozon_performance.OzonPerformanceConnector: [ozon_performance] Downloading report 4b3a173f-75fd-4a70-8130-c9e5f36dcf15...
+2026-01-18 19:30:32 [INFO    ] src.connectors.ozon_performance.OzonPerformanceConnector: [ozon_performance] Report downloaded, size: 40748 bytes

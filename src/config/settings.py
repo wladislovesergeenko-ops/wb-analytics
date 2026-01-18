@@ -98,3 +98,16 @@ def get_settings() -> Settings:
     if _settings_instance is None:
         _settings_instance = Settings()
     return _settings_instance
+
+# В src/config/settings.py добавляем:
+
+# Ozon API
+OZON_API_KEY: Optional[str] = None
+OZON_CLIENT_ID: Optional[str] = None
+OZON_ENABLED: bool = False
+
+# Ozon Table names
+OZON_ANALYTICS_TABLE: str = "ozon_analytics_data"
+
+# Ozon pipeline controls
+RUN_OZON_ANALYTICS: bool = False
