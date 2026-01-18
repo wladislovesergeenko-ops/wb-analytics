@@ -153,20 +153,20 @@ def run_spp_pipeline(supabase, connector: WBConnector, settings, date_from: date
     """Run SPP snapshot pipeline"""
     try:
         logger.info(f"Starting SPP snapshot pipeline: {date_from} -> {date_to}")
-        
+
         current_date = date_from
         total_records = 0
-        
+
         while current_date <= date_to:
             try:
                 logger.info(f"Processing SPP snapshot for {current_date}")
-                
+
                 raw_data = connector.fetch_orders(current_date.isoformat(), flag=1)
                 df = WBTransformer.transform_spp_snapshot(raw_data, current_date.isoformat(), only_not_canceled=True)
-                
+
                 if not df.empty:
                     records = df.to_dict(orient="records")
-                    
+
                     # Batch upsert
                     batch_size = settings.BATCH_SIZE
                     for i in range(0, len(records), batch_size):
@@ -174,25 +174,154 @@ def run_spp_pipeline(supabase, connector: WBConnector, settings, date_from: date
                             records[i : i + batch_size],
                             on_conflict="date,nmid"
                         ).execute()
-                    
+
                     total_records += len(records)
                     logger.info(f"Upserted {len(records)} SPP records for {current_date}")
                 else:
                     logger.info(f"No SPP data for {current_date}")
-            
+
             except Exception as e:
                 logger.error(f"Failed to process SPP for {current_date}: {e}", exc_info=True)
-            
+
             # Rate limiting
             if current_date < date_to:
                 time.sleep(settings.SLEEP_SECONDS)
-            
+
             current_date += timedelta(days=1)
-        
+
         logger.info(f"✅ SPP pipeline completed: {total_records} total records upserted")
-    
+
     except Exception as e:
         logger.error(f"SPP pipeline failed: {e}", exc_info=True)
+        raise
+
+
+def run_search_report_pipeline(supabase, connector: WBConnector, settings, date_from: date, date_to: date) -> None:
+    """Run search report pipeline (product positions in search)"""
+    try:
+        logger.info(f"Starting Search Report pipeline: {date_from} -> {date_to}")
+
+        current_date = date_from
+        total_records = 0
+
+        while current_date <= date_to:
+            try:
+                date_str = current_date.isoformat()
+                logger.info(f"Processing search report for {date_str}")
+
+                # Fetch all groups with pagination
+                groups = connector.fetch_search_report_all(
+                    start=date_str,
+                    end=date_str,
+                    sleep_seconds=settings.SLEEP_SECONDS,
+                )
+
+                if groups:
+                    df = WBTransformer.transform_search_report_groups(groups, date_str, date_str)
+
+                    if not df.empty:
+                        records = df.to_dict(orient="records")
+
+                        # Batch upsert
+                        batch_size = settings.BATCH_SIZE
+                        for i in range(0, len(records), batch_size):
+                            supabase.table(settings.SEARCH_REPORT_TABLE).upsert(
+                                records[i : i + batch_size],
+                                on_conflict="nm_id,period_start,period_end"
+                            ).execute()
+
+                        total_records += len(records)
+                        logger.info(f"Upserted {len(records)} search report records for {date_str}")
+                    else:
+                        logger.info(f"No search report data for {date_str}")
+                else:
+                    logger.info(f"No groups in search report for {date_str}")
+
+            except Exception as e:
+                logger.error(f"Failed to process search report for {current_date}: {e}", exc_info=True)
+
+            # Rate limiting
+            if current_date < date_to:
+                time.sleep(settings.SLEEP_SECONDS)
+
+            current_date += timedelta(days=1)
+
+        logger.info(f"✅ Search Report pipeline completed: {total_records} total records upserted")
+
+    except Exception as e:
+        logger.error(f"Search Report pipeline failed: {e}", exc_info=True)
+        raise
+
+
+def run_search_texts_pipeline(supabase, connector: WBConnector, settings, date_from: date, date_to: date) -> None:
+    """Run search texts pipeline (search queries per product)"""
+    try:
+        logger.info(f"Starting Search Texts pipeline: {date_from} -> {date_to}")
+
+        current_date = date_from
+        total_records = 0
+
+        while current_date <= date_to:
+            try:
+                date_str = current_date.isoformat()
+                logger.info(f"Processing search texts for {date_str}")
+
+                # Get nm_ids from search_report for this date
+                resp = supabase.table(settings.SEARCH_REPORT_TABLE).select("nm_id").eq(
+                    "period_start", date_str
+                ).execute()
+
+                nm_ids = list({r["nm_id"] for r in (resp.data or []) if r.get("nm_id")})
+
+                if not nm_ids:
+                    logger.info(f"No nm_ids in search_report for {date_str}, skipping")
+                    current_date += timedelta(days=1)
+                    continue
+
+                logger.info(f"Found {len(nm_ids)} products for {date_str}")
+
+                # Fetch search texts with chunking
+                items = connector.fetch_product_search_texts_chunked(
+                    nm_ids=nm_ids,
+                    start=date_str,
+                    end=date_str,
+                    sleep_seconds=settings.SLEEP_SECONDS,
+                )
+
+                if items:
+                    df = WBTransformer.transform_product_search_texts(items, date_str, date_str)
+
+                    if not df.empty:
+                        records = df.to_dict(orient="records")
+
+                        # Batch upsert
+                        batch_size = settings.BATCH_SIZE
+                        for i in range(0, len(records), batch_size):
+                            supabase.table(settings.SEARCH_TEXTS_TABLE).upsert(
+                                records[i : i + batch_size],
+                                on_conflict="nm_id,text,period_start,period_end"
+                            ).execute()
+
+                        total_records += len(records)
+                        logger.info(f"Upserted {len(records)} search texts records for {date_str}")
+                    else:
+                        logger.info(f"No search texts data for {date_str}")
+                else:
+                    logger.info(f"No search texts for {date_str}")
+
+            except Exception as e:
+                logger.error(f"Failed to process search texts for {current_date}: {e}", exc_info=True)
+
+            # Rate limiting
+            if current_date < date_to:
+                time.sleep(settings.SLEEP_SECONDS)
+
+            current_date += timedelta(days=1)
+
+        logger.info(f"✅ Search Texts pipeline completed: {total_records} total records upserted")
+
+    except Exception as e:
+        logger.error(f"Search Texts pipeline failed: {e}", exc_info=True)
         raise
 
 
@@ -248,7 +377,15 @@ def main():
         if settings.RUN_SPP:
             spp_start = date_to - timedelta(days=settings.SPP_OVERLAP_DAYS - 1)
             run_spp_pipeline(supabase, connector, settings, spp_start, date_to)
-        
+
+        # Search Report pipeline (must run before Search Texts)
+        if settings.RUN_SEARCH_REPORT:
+            run_search_report_pipeline(supabase, connector, settings, date_to, date_to)
+
+        # Search Texts pipeline (depends on Search Report data)
+        if settings.RUN_SEARCH_TEXTS:
+            run_search_texts_pipeline(supabase, connector, settings, date_to, date_to)
+
         # Future Ozon pipelines
         if settings.OZON_ENABLED and settings.RUN_OZON_PRODUCTS:
             logger.warning("Ozon pipelines coming soon (not implemented yet)")

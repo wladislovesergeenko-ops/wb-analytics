@@ -11,6 +11,8 @@ env:
   RUN_ADVERTS_FULLSTATS: "1"
   RUN_SALES_FUNNEL: "1"
   RUN_SPP: "1"
+  RUN_SEARCH_REPORT: "1"
+  RUN_SEARCH_TEXTS: "1"
 
   ADVERTS_STATUSES: "7,9,11"
   FULLSTATS_STATUSES: "9,11"
@@ -19,6 +21,9 @@ env:
   OVERLAP_DAYS: "2"
   SLEEP_SECONDS: "21"
   SPP_OVERLAP_DAYS: "1"
+
+  SEARCH_REPORT_TABLE: "wb_search_report_products"
+  SEARCH_TEXTS_TABLE: "wb_product_search_texts"
 
 jobs:
   run:

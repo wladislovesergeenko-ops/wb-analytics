@@ -329,10 +329,10 @@ class WBTransformer:
     def _to_date_str(x) -> str | None:
         """
         Convert WB timestamp to YYYY-MM-DD string
-        
+
         Args:
             x: Timestamp value
-        
+
         Returns:
             Date string or None
         """
@@ -345,3 +345,240 @@ class WBTransformer:
             return dt.strftime("%Y-%m-%d")
         except Exception:
             return None
+
+    # ==================== NEW TRANSFORMERS ====================
+
+    @staticmethod
+    def transform_tariffs_commission(raw_data: Dict[str, Any]) -> pd.DataFrame:
+        """
+        Transform tariffs commission data.
+        Result: 1 row per subject (category).
+
+        Args:
+            raw_data: Raw API response with commission data
+
+        Returns:
+            Dataframe with commission rates per subject
+        """
+        try:
+            report = raw_data.get("report", [])
+            if not report:
+                logger.warning("No commission data in response")
+                return pd.DataFrame()
+
+            df = pd.DataFrame(report)
+
+            # Rename to snake_case
+            rename_map = {
+                "subjectID": "subject_id",
+                "subjectName": "subject_name",
+                "parentID": "parent_id",
+                "parentName": "parent_name",
+                "kgvpMarketplace": "commission_fbs",
+                "paidStorageKgvp": "commission_fbw",
+                "kgvpSupplier": "commission_dbs",
+                "kgvpSupplierExpress": "commission_edbs",
+                "kgvpBooking": "commission_booking",
+                "kgvpPickup": "commission_pickup",
+            }
+
+            df = df.rename(columns={k: v for k, v in rename_map.items() if k in df.columns})
+
+            # Add timestamp
+            df["updated_at"] = datetime.utcnow().isoformat()
+
+            df = df.where(pd.notnull(df), None)
+
+            logger.info(f"Transformed commission data: {len(df)} subjects")
+            return df
+
+        except Exception as e:
+            logger.error(f"Error transforming commission data: {e}", exc_info=True)
+            raise TransformationError(f"Commission transformation failed: {e}") from e
+
+    @staticmethod
+    def transform_search_report_groups(
+        groups: List[Dict[str, Any]],
+        period_start: str,
+        period_end: str,
+    ) -> pd.DataFrame:
+        """
+        Transform search report groups to flat product rows.
+        Result: 1 row per product (nmId) per day.
+
+        Args:
+            groups: List of groups from search report response
+            period_start: Period start date 'YYYY-MM-DD'
+            period_end: Period end date 'YYYY-MM-DD'
+
+        Returns:
+            Dataframe with product search metrics
+        """
+        try:
+            if not groups:
+                logger.warning("No groups in search report data")
+                return pd.DataFrame()
+
+            rows: List[Dict[str, Any]] = []
+
+            for group in groups:
+                subject_id = group.get("subjectId")
+                subject_name = group.get("subjectName")
+                brand_name = group.get("brandName")
+                tag_id = group.get("tagId")
+                tag_name = group.get("tagName")
+
+                items = group.get("items", [])
+                for item in items:
+                    row = {
+                        "period_start": period_start,
+                        "period_end": period_end,
+                        "subject_id": subject_id,
+                        "subject_name": subject_name,
+                        "brand_name": brand_name,
+                        "tag_id": tag_id,
+                        "tag_name": tag_name,
+                        "nm_id": item.get("nmId"),
+                        "name": item.get("name"),
+                        "vendor_code": item.get("vendorCode"),
+                        "is_advertised": item.get("isAdvertised"),
+                        "is_card_rated": item.get("isCardRated"),
+                        "rating": item.get("rating"),
+                        "feedback_rating": item.get("feedbackRating"),
+                        "price_min": (item.get("price") or {}).get("minPrice"),
+                        "price_max": (item.get("price") or {}).get("maxPrice"),
+                        # Metrics - current values
+                        "avg_position": WBTransformer._get_metric_current(item, "avgPosition"),
+                        "avg_position_dynamics": WBTransformer._get_metric_dynamics(item, "avgPosition"),
+                        "open_card": WBTransformer._get_metric_current(item, "openCard"),
+                        "open_card_dynamics": WBTransformer._get_metric_dynamics(item, "openCard"),
+                        "add_to_cart": WBTransformer._get_metric_current(item, "addToCart"),
+                        "add_to_cart_dynamics": WBTransformer._get_metric_dynamics(item, "addToCart"),
+                        "open_to_cart": WBTransformer._get_metric_current(item, "openToCart"),
+                        "open_to_cart_dynamics": WBTransformer._get_metric_dynamics(item, "openToCart"),
+                        "orders": WBTransformer._get_metric_current(item, "orders"),
+                        "orders_dynamics": WBTransformer._get_metric_dynamics(item, "orders"),
+                        "cart_to_order": WBTransformer._get_metric_current(item, "cartToOrder"),
+                        "cart_to_order_dynamics": WBTransformer._get_metric_dynamics(item, "cartToOrder"),
+                        "visibility": WBTransformer._get_metric_current(item, "visibility"),
+                        "visibility_dynamics": WBTransformer._get_metric_dynamics(item, "visibility"),
+                    }
+                    rows.append(row)
+
+            if not rows:
+                logger.warning("No items in search report groups")
+                return pd.DataFrame()
+
+            df = pd.DataFrame(rows)
+            df = df.where(pd.notnull(df), None)
+
+            logger.info(f"Transformed search report: {len(df)} product rows")
+            return df
+
+        except Exception as e:
+            logger.error(f"Error transforming search report: {e}", exc_info=True)
+            raise TransformationError(f"Search report transformation failed: {e}") from e
+
+    @staticmethod
+    def transform_product_search_texts(
+        items: List[Dict[str, Any]],
+        period_start: str,
+        period_end: str,
+    ) -> pd.DataFrame:
+        """
+        Transform product search texts to flat rows.
+        Result: 1 row per search query per product.
+
+        Args:
+            items: List of items from search texts response
+            period_start: Period start date 'YYYY-MM-DD'
+            period_end: Period end date 'YYYY-MM-DD'
+
+        Returns:
+            Dataframe with search queries per product
+        """
+        try:
+            if not items:
+                logger.warning("No items in search texts data")
+                return pd.DataFrame()
+
+            rows: List[Dict[str, Any]] = []
+
+            for item in items:
+                row = {
+                    "period_start": period_start,
+                    "period_end": period_end,
+                    "text": item.get("text"),
+                    "nm_id": item.get("nmId"),
+                    "subject_name": item.get("subjectName"),
+                    "brand_name": item.get("brandName"),
+                    "vendor_code": item.get("vendorCode"),
+                    "name": item.get("name"),
+                    "is_card_rated": item.get("isCardRated"),
+                    "rating": item.get("rating"),
+                    "feedback_rating": item.get("feedbackRating"),
+                    "price_min": (item.get("price") or {}).get("minPrice"),
+                    "price_max": (item.get("price") or {}).get("maxPrice"),
+                    # Frequency
+                    "frequency": WBTransformer._get_metric_current(item, "frequency"),
+                    "frequency_dynamics": WBTransformer._get_metric_dynamics(item, "frequency"),
+                    "week_frequency": item.get("weekFrequency"),
+                    # Position metrics
+                    "median_position": WBTransformer._get_metric_current(item, "medianPosition"),
+                    "median_position_dynamics": WBTransformer._get_metric_dynamics(item, "medianPosition"),
+                    "avg_position": WBTransformer._get_metric_current(item, "avgPosition"),
+                    "avg_position_dynamics": WBTransformer._get_metric_dynamics(item, "avgPosition"),
+                    # Conversion metrics
+                    "open_card": WBTransformer._get_metric_current(item, "openCard"),
+                    "open_card_dynamics": WBTransformer._get_metric_dynamics(item, "openCard"),
+                    "open_card_percentile": WBTransformer._get_metric_percentile(item, "openCard"),
+                    "add_to_cart": WBTransformer._get_metric_current(item, "addToCart"),
+                    "add_to_cart_dynamics": WBTransformer._get_metric_dynamics(item, "addToCart"),
+                    "add_to_cart_percentile": WBTransformer._get_metric_percentile(item, "addToCart"),
+                    "open_to_cart": WBTransformer._get_metric_current(item, "openToCart"),
+                    "open_to_cart_dynamics": WBTransformer._get_metric_dynamics(item, "openToCart"),
+                    "open_to_cart_percentile": WBTransformer._get_metric_percentile(item, "openToCart"),
+                    "orders": WBTransformer._get_metric_current(item, "orders"),
+                    "orders_dynamics": WBTransformer._get_metric_dynamics(item, "orders"),
+                    "orders_percentile": WBTransformer._get_metric_percentile(item, "orders"),
+                    "cart_to_order": WBTransformer._get_metric_current(item, "cartToOrder"),
+                    "cart_to_order_dynamics": WBTransformer._get_metric_dynamics(item, "cartToOrder"),
+                    "cart_to_order_percentile": WBTransformer._get_metric_percentile(item, "cartToOrder"),
+                    "visibility": WBTransformer._get_metric_current(item, "visibility"),
+                    "visibility_dynamics": WBTransformer._get_metric_dynamics(item, "visibility"),
+                }
+                rows.append(row)
+
+            df = pd.DataFrame(rows)
+            df = df.where(pd.notnull(df), None)
+
+            logger.info(f"Transformed search texts: {len(df)} query rows")
+            return df
+
+        except Exception as e:
+            logger.error(f"Error transforming search texts: {e}", exc_info=True)
+            raise TransformationError(f"Search texts transformation failed: {e}") from e
+
+    @staticmethod
+    def _get_metric_current(item: Dict, metric_name: str):
+        """Extract 'current' value from metric object"""
+        metric = item.get(metric_name)
+        if isinstance(metric, dict):
+            return metric.get("current")
+        return metric
+
+    @staticmethod
+    def _get_metric_dynamics(item: Dict, metric_name: str):
+        """Extract 'dynamics' value from metric object"""
+        metric = item.get(metric_name)
+        if isinstance(metric, dict):
+            return metric.get("dynamics")
+        return None
+
+    @staticmethod
+    def _get_metric_percentile(item: Dict, metric_name: str):
+        """Extract 'percentile' value from metric object"""
+        metric = item.get(metric_name)
+        if isinstance(metric, dict):
+            return metric.get("percentile")
+        return None

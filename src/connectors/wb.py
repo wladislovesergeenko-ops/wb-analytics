@@ -20,6 +20,11 @@ class WBConnector(BaseConnector):
     ADVERTS_URL = "https://advert-api.wildberries.ru/api/advert/v2/adverts"
     FULLSTATS_URL = "https://advert-api.wildberries.ru/adv/v3/fullstats"
     ORDERS_URL = "https://statistics-api.wildberries.ru/api/v1/supplier/orders"
+
+    # New endpoints
+    TARIFFS_COMMISSION_URL = "https://common-api.wildberries.ru/api/v1/tariffs/commission"
+    SEARCH_REPORT_URL = "https://seller-analytics-api.wildberries.ru/api/v2/search-report/report"
+    SEARCH_TEXTS_URL = "https://seller-analytics-api.wildberries.ru/api/v2/search-report/product/search-texts"
     
     def __init__(self, api_key: str, timeout: float = 60.0):
         """
@@ -215,3 +220,263 @@ class WBConnector(BaseConnector):
     def _chunked(seq: List[int], size: int) -> List[List[int]]:
         """Split list into chunks"""
         return [seq[i : i + size] for i in range(0, len(seq), size)]
+
+    # ==================== NEW METHODS ====================
+
+    @retry_on_exception(exception_types=(httpx.HTTPError,), max_retries=3, delay_seconds=5)
+    def fetch_tariffs_commission(self, locale: str = "ru") -> Dict[str, Any]:
+        """
+        Fetch commission tariffs for all categories.
+        Rate limit: 1 request/min
+
+        Args:
+            locale: Response language ('ru', 'en', 'zh')
+
+        Returns:
+            API response with commission data by subject
+        """
+        headers = self._get_headers()
+        params = {"locale": locale}
+
+        with httpx.Client(timeout=self.timeout) as client:
+            r = client.get(self.TARIFFS_COMMISSION_URL, headers=headers, params=params)
+            r.raise_for_status()
+            self.log_info(f"Fetched tariffs commission data (locale={locale})")
+            return r.json()
+
+    @retry_on_exception(exception_types=(httpx.HTTPError,), max_retries=3, delay_seconds=5)
+    def fetch_search_report(
+        self,
+        start: str,
+        end: str,
+        *,
+        past_start: str = None,
+        past_end: str = None,
+        nm_ids: List[int] = None,
+        subject_ids: List[int] = None,
+        brand_names: List[str] = None,
+        tag_ids: List[int] = None,
+        position_cluster: str = "all",
+        order_by_field: str = "avgPosition",
+        order_by_mode: str = "asc",
+        limit: int = 1000,
+        offset: int = 0,
+    ) -> Dict[str, Any]:
+        """
+        Fetch search report with product positions and metrics.
+        Rate limit: 3 requests/min (20 sec interval)
+
+        Args:
+            start: Current period start date 'YYYY-MM-DD'
+            end: Current period end date 'YYYY-MM-DD'
+            past_start: Past period start date for comparison (optional)
+            past_end: Past period end date for comparison (optional)
+            nm_ids: Filter by product IDs (optional)
+            subject_ids: Filter by subject IDs (optional)
+            brand_names: Filter by brand names (optional)
+            tag_ids: Filter by tag IDs (optional)
+            position_cluster: 'all', 'firstHundred', 'secondHundred', 'below'
+            order_by_field: Sort field ('avgPosition', 'openCard', 'addToCart', 'orders', etc.)
+            order_by_mode: Sort direction ('asc', 'desc')
+            limit: Max items per response (max 1000)
+            offset: Items to skip for pagination
+
+        Returns:
+            API response with groups data
+        """
+        headers = self._get_headers()
+
+        payload = {
+            "currentPeriod": {"start": start, "end": end},
+            "positionCluster": position_cluster,
+            "orderBy": {"field": order_by_field, "mode": order_by_mode},
+            "limit": limit,
+            "offset": offset,
+        }
+
+        # Optional past period for dynamics calculation
+        if past_start and past_end:
+            payload["pastPeriod"] = {"start": past_start, "end": past_end}
+
+        # Optional filters
+        if nm_ids:
+            payload["nmIds"] = nm_ids
+        if subject_ids:
+            payload["subjectIds"] = subject_ids
+        if brand_names:
+            payload["brandNames"] = brand_names
+        if tag_ids:
+            payload["tagIds"] = tag_ids
+
+        with httpx.Client(timeout=self.timeout) as client:
+            r = client.post(self.SEARCH_REPORT_URL, headers=headers, json=payload)
+            r.raise_for_status()
+            self.log_info(f"Fetched search report: {start} -> {end}, offset={offset}, limit={limit}")
+            return r.json()
+
+    def fetch_search_report_all(
+        self,
+        start: str,
+        end: str,
+        *,
+        past_start: str = None,
+        past_end: str = None,
+        nm_ids: List[int] = None,
+        subject_ids: List[int] = None,
+        brand_names: List[str] = None,
+        tag_ids: List[int] = None,
+        position_cluster: str = "all",
+        order_by_field: str = "avgPosition",
+        order_by_mode: str = "asc",
+        sleep_seconds: float = 21,
+    ) -> List[Dict[str, Any]]:
+        """
+        Fetch ALL search report data with automatic pagination.
+
+        Returns:
+            List of all groups from all pages
+        """
+        import time
+
+        all_groups = []
+        offset = 0
+        limit = 1000
+        page = 1
+
+        while True:
+            response = self.fetch_search_report(
+                start=start,
+                end=end,
+                past_start=past_start,
+                past_end=past_end,
+                nm_ids=nm_ids,
+                subject_ids=subject_ids,
+                brand_names=brand_names,
+                tag_ids=tag_ids,
+                position_cluster=position_cluster,
+                order_by_field=order_by_field,
+                order_by_mode=order_by_mode,
+                limit=limit,
+                offset=offset,
+            )
+
+            groups = response.get("data", {}).get("groups", [])
+            if not groups:
+                break
+
+            all_groups.extend(groups)
+            self.log_info(f"Search report page {page}: got {len(groups)} groups, total {len(all_groups)}")
+
+            if len(groups) < limit:
+                break
+
+            offset += limit
+            page += 1
+            time.sleep(sleep_seconds)
+
+        return all_groups
+
+    @retry_on_exception(exception_types=(httpx.HTTPError,), max_retries=3, delay_seconds=5)
+    def fetch_product_search_texts(
+        self,
+        nm_ids: List[int],
+        start: str,
+        end: str,
+        *,
+        past_start: str = None,
+        past_end: str = None,
+        top_order_by: str = "openToCart",
+        order_by_field: str = "avgPosition",
+        order_by_mode: str = "asc",
+        limit: int = 30,
+    ) -> Dict[str, Any]:
+        """
+        Fetch top search queries for specific products.
+        Rate limit: 3 requests/min (20 sec interval)
+
+        Args:
+            nm_ids: Product IDs (max 50 per request)
+            start: Current period start date 'YYYY-MM-DD'
+            end: Current period end date 'YYYY-MM-DD'
+            past_start: Past period start date (optional)
+            past_end: Past period end date (optional)
+            top_order_by: Metric for top queries ('openCard', 'addToCart', 'openToCart', 'orders', 'cartToOrder')
+            order_by_field: Sort field
+            order_by_mode: Sort direction ('asc', 'desc')
+            limit: Max queries per product (30 standard, 100 advanced tier)
+
+        Returns:
+            API response with search texts data
+        """
+        if len(nm_ids) > 50:
+            raise WBConnectorError("fetch_product_search_texts: max 50 nmIds per request")
+
+        headers = self._get_headers()
+
+        payload = {
+            "currentPeriod": {"start": start, "end": end},
+            "nmIds": nm_ids,
+            "topOrderBy": top_order_by,
+            "orderBy": {"field": order_by_field, "mode": order_by_mode},
+            "limit": limit,
+        }
+
+        if past_start and past_end:
+            payload["pastPeriod"] = {"start": past_start, "end": past_end}
+
+        with httpx.Client(timeout=self.timeout) as client:
+            r = client.post(self.SEARCH_TEXTS_URL, headers=headers, json=payload)
+            r.raise_for_status()
+            self.log_info(f"Fetched product search texts: {len(nm_ids)} products, {start} -> {end}")
+            return r.json()
+
+    def fetch_product_search_texts_chunked(
+        self,
+        nm_ids: List[int],
+        start: str,
+        end: str,
+        *,
+        past_start: str = None,
+        past_end: str = None,
+        top_order_by: str = "openToCart",
+        order_by_field: str = "avgPosition",
+        order_by_mode: str = "asc",
+        limit: int = 30,
+        chunk_size: int = 50,
+        sleep_seconds: float = 21,
+    ) -> List[Dict[str, Any]]:
+        """
+        Fetch search texts for many products with chunking (max 50 per request).
+
+        Returns:
+            List of all items from all chunks
+        """
+        import time
+
+        if not nm_ids:
+            return []
+
+        all_items = []
+        chunks = self._chunked(nm_ids, chunk_size)
+
+        for idx, chunk in enumerate(chunks, start=1):
+            response = self.fetch_product_search_texts(
+                nm_ids=chunk,
+                start=start,
+                end=end,
+                past_start=past_start,
+                past_end=past_end,
+                top_order_by=top_order_by,
+                order_by_field=order_by_field,
+                order_by_mode=order_by_mode,
+                limit=limit,
+            )
+
+            items = response.get("data", {}).get("items", [])
+            all_items.extend(items)
+            self.log_info(f"Search texts chunk {idx}/{len(chunks)}: got {len(items)} items, total {len(all_items)}")
+
+            if idx < len(chunks):
+                time.sleep(sleep_seconds)
+
+        return all_items

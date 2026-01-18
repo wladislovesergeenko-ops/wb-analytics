@@ -29,12 +29,16 @@ class Settings(BaseSettings):
     RUN_SALES_FUNNEL: bool = True
     RUN_SPP: bool = False
     RUN_OZON_PRODUCTS: bool = False
+    RUN_SEARCH_REPORT: bool = False
+    RUN_SEARCH_TEXTS: bool = False
     
     # Table names
     SALES_FUNNEL_TABLE: str = "wb_sales_funnel_products"
     ADVERTS_TABLE: str = "wb_adverts_nm_settings"
     FULLSTATS_TABLE: str = "wb_adv_fullstats_daily"
     SPP_TABLE: str = "wb_spp_daily"
+    SEARCH_REPORT_TABLE: str = "wb_search_report_products"
+    SEARCH_TEXTS_TABLE: str = "wb_product_search_texts"
     
     # Timing and batch settings
     SLEEP_SECONDS: int = 21
