@@ -1,6 +1,22 @@
-httpx
-pandas
-python-dotenv
-supabase
-openai>=1.40.0
-python-dotenv>=1.0.0
+# Core dependencies
+python-dotenv==1.0.1
+supabase==2.3.5
+openai==1.41.0
+
+# Data processing
+pandas>=2.2.0
+numpy>=1.26.0
+
+# Configuration and validation
+pydantic>=2.5.0
+pydantic-settings>=2.1.0
+
+# HTTP client
+httpx>=0.25.0
+
+# Development (optional)
+pytest==7.4.3
+pytest-cov==4.1.0
+black==23.12.1
+ruff==0.1.13
+mypy==1.7.1

@@ -1,92 +1,265 @@
-import os
-from dotenv import load_dotenv
+"""Main ETL entry point with new refactored architecture"""
+
+import time
+from datetime import date, timedelta
 from supabase import create_client
-import datetime as dt
-from .sales_funnel import fetch_sales_funnel_products, build_df_out, supabase_upsert_df
-from .sales_funnel import load_sales_funnel_by_days
+
+from src.config.settings import get_settings
+from src.logging_config.logger import setup_logger, configure_logging
+from src.connectors.wb import WBConnector
+from src.etl.transformers import WBTransformer
+from src.core.exceptions import ETLException, WBConnectorError
+
+
+logger = setup_logger(__name__)
+
+
+def run_adverts_settings_pipeline(supabase, connector: WBConnector, settings) -> None:
+    """Run adverts settings refresh pipeline"""
+    try:
+        logger.info("Starting WB Adverts Settings pipeline")
+        
+        raw_data = connector.fetch_adverts()
+        df = WBTransformer.transform_adverts(raw_data, settings.get_adverts_statuses())
+        
+        if df.empty:
+            logger.warning("No adverts data to upsert")
+            return
+        
+        # Delete old records and insert new ones
+        try:
+            supabase.table(settings.ADVERTS_TABLE).delete().in_(
+                "status", 
+                settings.get_adverts_statuses()
+            ).execute()
+            logger.info(f"Deleted old adverts records for statuses {settings.get_adverts_statuses()}")
+        except Exception as e:
+            logger.warning(f"Could not delete old adverts: {e}")
+        
+        # Batch insert
+        records = df.to_dict(orient="records")
+        batch_size = settings.BATCH_SIZE
+        for i in range(0, len(records), batch_size):
+            supabase.table(settings.ADVERTS_TABLE).insert(
+                records[i : i + batch_size]
+            ).execute()
+        
+        logger.info(f"✅ Adverts settings pipeline completed: {len(records)} records upserted")
+    
+    except Exception as e:
+        logger.error(f"Adverts settings pipeline failed: {e}", exc_info=True)
+        raise
+
+
+def run_sales_funnel_pipeline(supabase, connector: WBConnector, settings, date_from: date, date_to: date) -> None:
+    """Run sales funnel pipeline for date range"""
+    try:
+        logger.info(f"Starting WB Sales Funnel pipeline: {date_from} -> {date_to}")
+        
+        current_date = date_from
+        total_records = 0
+        
+        while current_date <= date_to:
+            try:
+                logger.info(f"Processing sales funnel for {current_date}")
+                
+                raw_data = connector.fetch_sales_funnel(current_date.isoformat(), current_date.isoformat())
+                df = WBTransformer.transform_sales_funnel(raw_data)
+                
+                if not df.empty:
+                    records = df.to_dict(orient="records")
+                    
+                    # Batch upsert
+                    batch_size = settings.BATCH_SIZE
+                    for i in range(0, len(records), batch_size):
+                        supabase.table(settings.SALES_FUNNEL_TABLE).upsert(
+                            records[i : i + batch_size],
+                            on_conflict="nmid,periodstart,periodend"
+                        ).execute()
+                    
+                    total_records += len(records)
+                    logger.info(f"Upserted {len(records)} sales funnel records for {current_date}")
+                else:
+                    logger.info(f"No sales funnel data for {current_date}")
+                
+            except Exception as e:
+                logger.error(f"Failed to process {current_date}: {e}", exc_info=True)
+            
+            # Rate limiting
+            if current_date < date_to:
+                time.sleep(settings.SLEEP_SECONDS)
+            
+            current_date += timedelta(days=1)
+        
+        logger.info(f"✅ Sales funnel pipeline completed: {total_records} total records upserted")
+    
+    except Exception as e:
+        logger.error(f"Sales funnel pipeline failed: {e}", exc_info=True)
+        raise
+
+
+def run_fullstats_pipeline(supabase, connector: WBConnector, settings, date_from: date, date_to: date) -> None:
+    """Run adverts fullstats pipeline"""
+    try:
+        logger.info(f"Starting WB Fullstats pipeline: {date_from} -> {date_to}")
+        
+        # Get active advert IDs from Supabase
+        resp = supabase.table(settings.ADVERTS_TABLE).select("advert_id").in_(
+            "status",
+            settings.get_fullstats_statuses()
+        ).limit(10000).execute()
+        
+        advert_ids = sorted({int(r["advert_id"]) for r in (resp.data or []) if r.get("advert_id")})
+        
+        if not advert_ids:
+            logger.info("No active advert IDs found, skipping fullstats")
+            return
+        
+        logger.info(f"Found {len(advert_ids)} active adverts for fullstats")
+        
+        # Fetch fullstats data
+        raw_data = connector.fetch_fullstats_chunked(
+            advert_ids=advert_ids,
+            begin_date=date_from.isoformat(),
+            end_date=date_to.isoformat(),
+            chunk_size=settings.FULLSTATS_CHUNK_SIZE,
+            sleep_seconds=settings.FULLSTATS_SLEEP_SECONDS,
+        )
+        
+        # Transform
+        df = WBTransformer.transform_fullstats_days(raw_data)
+        
+        if df.empty:
+            logger.warning("No fullstats data to upsert")
+            return
+        
+        # Batch upsert
+        records = df.to_dict(orient="records")
+        batch_size = settings.BATCH_SIZE
+        for i in range(0, len(records), batch_size):
+            supabase.table(settings.FULLSTATS_TABLE).upsert(
+                records[i : i + batch_size],
+                on_conflict="advert_id,date"
+            ).execute()
+        
+        logger.info(f"✅ Fullstats pipeline completed: {len(records)} records upserted")
+    
+    except Exception as e:
+        logger.error(f"Fullstats pipeline failed: {e}", exc_info=True)
+        raise
+
+
+def run_spp_pipeline(supabase, connector: WBConnector, settings, date_from: date, date_to: date) -> None:
+    """Run SPP snapshot pipeline"""
+    try:
+        logger.info(f"Starting SPP snapshot pipeline: {date_from} -> {date_to}")
+        
+        current_date = date_from
+        total_records = 0
+        
+        while current_date <= date_to:
+            try:
+                logger.info(f"Processing SPP snapshot for {current_date}")
+                
+                raw_data = connector.fetch_orders(current_date.isoformat(), flag=1)
+                df = WBTransformer.transform_spp_snapshot(raw_data, current_date.isoformat(), only_not_canceled=True)
+                
+                if not df.empty:
+                    records = df.to_dict(orient="records")
+                    
+                    # Batch upsert
+                    batch_size = settings.BATCH_SIZE
+                    for i in range(0, len(records), batch_size):
+                        supabase.table(settings.SPP_TABLE).upsert(
+                            records[i : i + batch_size],
+                            on_conflict="date,nmid"
+                        ).execute()
+                    
+                    total_records += len(records)
+                    logger.info(f"Upserted {len(records)} SPP records for {current_date}")
+                else:
+                    logger.info(f"No SPP data for {current_date}")
+            
+            except Exception as e:
+                logger.error(f"Failed to process SPP for {current_date}: {e}", exc_info=True)
+            
+            # Rate limiting
+            if current_date < date_to:
+                time.sleep(settings.SLEEP_SECONDS)
+            
+            current_date += timedelta(days=1)
+        
+        logger.info(f"✅ SPP pipeline completed: {total_records} total records upserted")
+    
+    except Exception as e:
+        logger.error(f"SPP pipeline failed: {e}", exc_info=True)
+        raise
 
 
 def main():
-    # 1) ENV
-    load_dotenv(dotenv_path=".env")
-
-    wb_key = os.getenv("WB_KEY")
-    sb_url = os.getenv("SUPABASE_URL")
-    sb_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY") or os.getenv("SUPABASE_ANON_KEY")
-
-    if not wb_key:
-        raise RuntimeError("WB_KEY is missing")
-    if not sb_url or not sb_key:
-        raise RuntimeError("SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY (or SUPABASE_ANON_KEY) is missing")
-    
-    # 2) Supabase client
-    supabase = create_client(sb_url, sb_key)
-    
-    # 3) FLAGS (✅ ВОТ СЮДА)
-    run_adverts_settings = os.getenv("RUN_ADVERTS_SETTINGS", "1") == "1"
-    run_sales_funnel = os.getenv("RUN_SALES_FUNNEL", "1") == "1"
-    run_adverts_fullstats = os.getenv("RUN_ADVERTS_FULLSTATS", "0") == "1"
-    run_spp = os.getenv("RUN_SPP", "0") == "1"
-
-    # 4) PARAMS
-    table = os.getenv("SALES_FUNNEL_TABLE", "wb_sales_funnel_products")
-    fullstats_sleep = int(os.getenv("FULLSTATS_SLEEP_SECONDS", "15"))
-    fullstats_chunk = int(os.getenv("FULLSTATS_CHUNK_SIZE", "50"))
-    overlap_days = int(os.getenv("OVERLAP_DAYS", "2"))
-    sleep_seconds = int(os.getenv("SLEEP_SECONDS", "21"))
-    spp_overlap_days = int(os.getenv("SPP_OVERLAP_DAYS", "1"))
-
-    date_to = dt.date.today() - dt.timedelta(days=1)          # вчера
-    date_from = date_to - dt.timedelta(days=overlap_days)     # overlap
-
-    date_from = date_from.strftime("%Y-%m-%d")
-    date_to = date_to.strftime("%Y-%m-%d")
-
-    # 5) RUN STEPS
-    from .refresh_wb_adverts_nm_settings import refresh_wb_adverts_nm_settings
-    if run_adverts_settings:
-        refresh_wb_adverts_nm_settings(wb_key, supabase)
-
-    if run_adverts_fullstats:
-        from .load_fullstats_daily_range import load_fullstats_daily_range
-
-        # только вчера
-        yday = (dt.date.today() - dt.timedelta(days=1)).strftime("%Y-%m-%d")
-        print("RUN adverts fullstats for day:", yday)
-
-        load_fullstats_daily_range(
-            wb_key=wb_key,
-            supabase=supabase,
-            begin_date=yday,
-            end_date=yday,
-            sleep_seconds=fullstats_sleep,
-            chunk_size=fullstats_chunk,
-            verbose=True,
-        )
-    
-    if run_sales_funnel:
-        print("RUN sales_funnel range:", date_from, "->", date_to)
-        load_sales_funnel_by_days(
-            wb_key=wb_key,
-            supabase=supabase,
-            table_name=table,
-            date_from=date_from,
-            date_to=date_to,
-            sleep_seconds=sleep_seconds,
-            verbose=True,
-        )
-        print("✅ range upsert ok ->", table)
-
-    if run_spp:
-        from .spp_snapshot import load_spp_snapshot_yesterday  # имя файла поправь на своё
-        load_spp_snapshot_yesterday(
-            wb_key=wb_key,
-            supabase=supabase,
-            overlap_days=spp_overlap_days,
-            verbose=True,
-        )
-
+    """Main ETL orchestration function"""
+    try:
+        logger.info("=" * 80)
+        logger.info("Starting ETL Application")
+        logger.info("=" * 80)
         
+        # Load settings from .env
+        settings = get_settings()
+        
+        # Configure logging with settings
+        configure_logging(
+            log_level=settings.LOG_LEVEL,
+            log_dir=settings.LOG_DIR,
+            log_to_file=settings.LOG_TO_FILE,
+        )
+        
+        # Initialize Supabase client
+        sb_key = settings.get_supabase_key()
+        if not sb_key:
+            raise RuntimeError("No Supabase key available (SERVICE_ROLE or ANON)")
+        
+        supabase = create_client(settings.SUPABASE_URL, sb_key)
+        logger.info("✅ Supabase client initialized")
+        
+        # Initialize WB connector
+        connector = WBConnector(settings.WB_KEY)
+        
+        # Validate connection
+        if not connector.validate_connection():
+            raise WBConnectorError("Failed to validate WB API connection")
+        logger.info("✅ WB API connection validated")
+        
+        # Calculate date ranges
+        date_to = date.today() - timedelta(days=1)  # Yesterday
+        date_from = date_to - timedelta(days=settings.OVERLAP_DAYS)
+        
+        logger.info(f"Processing period: {date_from} -> {date_to}")
+        
+        # Run pipelines based on flags
+        if settings.RUN_ADVERTS_SETTINGS:
+            run_adverts_settings_pipeline(supabase, connector, settings)
+        
+        if settings.RUN_SALES_FUNNEL:
+            run_sales_funnel_pipeline(supabase, connector, settings, date_from, date_to)
+        
+        if settings.RUN_ADVERTS_FULLSTATS:
+            run_fullstats_pipeline(supabase, connector, settings, date_to, date_to)
+        
+        if settings.RUN_SPP:
+            spp_start = date_to - timedelta(days=settings.SPP_OVERLAP_DAYS - 1)
+            run_spp_pipeline(supabase, connector, settings, spp_start, date_to)
+        
+        # Future Ozon pipelines
+        if settings.OZON_ENABLED and settings.RUN_OZON_PRODUCTS:
+            logger.warning("Ozon pipelines coming soon (not implemented yet)")
+        
+        logger.info("=" * 80)
+        logger.info("✅ All ETL pipelines completed successfully!")
+        logger.info("=" * 80)
+    
+    except Exception as e:
+        logger.error(f"Fatal error in main ETL: {e}", exc_info=True)
+        raise
 
 
 if __name__ == "__main__":
