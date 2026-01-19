@@ -11,9 +11,9 @@ numpy>=1.26.0
 pydantic>=2.5.0
 pydantic-settings>=2.1.0
 
-# HTTP client (pinned for supabase 2.3.5 compatibility)
-httpx==0.27.0
-httpcore==1.0.5
+# HTTP client (pinned for supabase 2.3.5 compatibility - requires httpx<0.26)
+httpx==0.25.2
+httpcore==1.0.2
 
 # Development (optional)
 pytest==7.4.3
