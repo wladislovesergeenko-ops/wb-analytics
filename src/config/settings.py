@@ -5,40 +5,51 @@ from typing import Optional
 
 class Settings(BaseSettings):
     """Основной класс конфигурации приложения"""
-    
+
     # Supabase
     SUPABASE_URL: str
     SUPABASE_SERVICE_ROLE_KEY: Optional[str] = None
     SUPABASE_ANON_KEY: Optional[str] = None
-    
+
     # Wildberries API
     WB_KEY: str
-    
-    # Ozon API (для будущего)
-    OZON_KEY: Optional[str] = None
-    OZON_ENABLED: bool = False
+
+    # Ozon Seller API (Analytics)
+    OZON_API_KEY: Optional[str] = None
+    OZON_CLIENT_ID: Optional[str] = None
+
+    # Ozon Performance API (Ads)
+    OZON_PERF_CLIENT_ID: Optional[str] = None
+    OZON_PERF_CLIENT_SECRET: Optional[str] = None
     
     # Logging
     LOG_LEVEL: str = "INFO"
     LOG_DIR: str = "logs"
     LOG_TO_FILE: bool = True
     
-    # Runflags / ETL Pipeline Controls
+    # Runflags / ETL Pipeline Controls - Wildberries
     RUN_ADVERTS_SETTINGS: bool = True
     RUN_ADVERTS_FULLSTATS: bool = False
     RUN_SALES_FUNNEL: bool = True
     RUN_SPP: bool = False
-    RUN_OZON_PRODUCTS: bool = False
     RUN_SEARCH_REPORT: bool = False
     RUN_SEARCH_TEXTS: bool = False
-    
-    # Table names
+
+    # Runflags / ETL Pipeline Controls - Ozon
+    RUN_OZON_ANALYTICS: bool = False
+    RUN_OZON_PERFORMANCE: bool = False
+
+    # Table names - Wildberries
     SALES_FUNNEL_TABLE: str = "wb_sales_funnel_products"
     ADVERTS_TABLE: str = "wb_adverts_nm_settings"
     FULLSTATS_TABLE: str = "wb_adv_fullstats_daily"
     SPP_TABLE: str = "wb_spp_daily"
     SEARCH_REPORT_TABLE: str = "wb_search_report_products"
     SEARCH_TEXTS_TABLE: str = "wb_product_search_texts"
+
+    # Table names - Ozon
+    OZON_ANALYTICS_TABLE: str = "ozon_analytics_data"
+    OZON_PERFORMANCE_TABLE: str = "ozon_campaign_product_stats"
     
     # Timing and batch settings
     SLEEP_SECONDS: int = 21
@@ -103,15 +114,3 @@ def get_settings() -> Settings:
         _settings_instance = Settings()
     return _settings_instance
 
-# В src/config/settings.py добавляем:
-
-# Ozon API
-OZON_API_KEY: Optional[str] = None
-OZON_CLIENT_ID: Optional[str] = None
-OZON_ENABLED: bool = False
-
-# Ozon Table names
-OZON_ANALYTICS_TABLE: str = "ozon_analytics_data"
-
-# Ozon pipeline controls
-RUN_OZON_ANALYTICS: bool = False

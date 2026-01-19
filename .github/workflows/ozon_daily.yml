@@ -1,0 +1,61 @@
+name: Ozon ETL Daily
+
+on:
+  schedule:
+    # Каждый день в 04:00 UTC = 07:00 по Москве (UTC+3)
+    - cron: "0 4 * * *"
+  workflow_dispatch:
+
+env:
+  # Enable Ozon pipelines
+  RUN_OZON_ANALYTICS: "1"
+  RUN_OZON_PERFORMANCE: "1"
+
+  # Disable WB pipelines (they run in separate workflow)
+  RUN_ADVERTS_SETTINGS: "0"
+  RUN_ADVERTS_FULLSTATS: "0"
+  RUN_SALES_FUNNEL: "0"
+  RUN_SPP: "0"
+  RUN_SEARCH_REPORT: "0"
+  RUN_SEARCH_TEXTS: "0"
+
+  # Date range
+  OVERLAP_DAYS: "2"
+
+  # Tables
+  OZON_ANALYTICS_TABLE: "ozon_analytics_data"
+  OZON_PERFORMANCE_TABLE: "ozon_campaign_product_stats"
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run Ozon ETL
+        env:
+          # Supabase
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+
+          # WB key (required by settings, but not used)
+          WB_KEY: ${{ secrets.WB_KEY }}
+
+          # Ozon Seller API (Analytics)
+          OZON_API_KEY: ${{ secrets.OZON_API_KEY }}
+          OZON_CLIENT_ID: ${{ secrets.OZON_CLIENT_ID }}
+
+          # Ozon Performance API (Ads)
+          OZON_PERF_CLIENT_ID: ${{ secrets.OZON_PERF_CLIENT_ID }}
+          OZON_PERF_CLIENT_SECRET: ${{ secrets.OZON_PERF_CLIENT_SECRET }}
+        run: |
+          python -m src.etl.main

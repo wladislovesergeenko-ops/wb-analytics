@@ -8,7 +8,7 @@ from src.config.settings import get_settings
 from src.logging_config.logger import setup_logger, configure_logging
 from src.connectors.wb import WBConnector
 from src.etl.transformers import WBTransformer
-from src.core.exceptions import ETLException, WBConnectorError
+from src.core.exceptions import ETLException, WBConnectorError, OzonConnectorError
 
 
 logger = setup_logger(__name__)
@@ -325,6 +325,198 @@ def run_search_texts_pipeline(supabase, connector: WBConnector, settings, date_f
         raise
 
 
+def run_ozon_analytics_pipeline(supabase, settings, date_from: date, date_to: date) -> None:
+    """Run Ozon Analytics pipeline (sales data)"""
+    try:
+        from src.connectors.ozon import OzonConnector
+        from src.etl.ozon_transformer import OzonTransformer
+
+        logger.info(f"Starting Ozon Analytics pipeline: {date_from} -> {date_to}")
+
+        # Initialize connector
+        connector = OzonConnector(
+            api_key=settings.OZON_API_KEY,
+            client_id=settings.OZON_CLIENT_ID
+        )
+
+        if not connector.validate_connection():
+            raise OzonConnectorError("Failed to validate Ozon API connection")
+        logger.info("✅ Ozon API connection validated")
+
+        # Metrics to fetch
+        metrics = [
+            "revenue",
+            "ordered_units",
+            "hits_view_search",
+            "hits_view_pdp",
+            "hits_view",
+            "hits_tocart_search",
+            "hits_tocart_pdp",
+            "hits_tocart",
+            "session_view_search",
+            "session_view_pdp",
+            "session_view",
+            "delivered_units",
+            "position_category",
+        ]
+
+        # Fetch data with pagination
+        all_records = []
+        offset = 0
+        limit = 1000
+
+        while True:
+            raw_data = connector.fetch_analytics_data(
+                date_from=date_from.isoformat(),
+                date_to=date_to.isoformat(),
+                metrics=metrics,
+                dimensions=["day", "sku"],
+                limit=limit,
+                offset=offset
+            )
+
+            records = OzonTransformer.transform_analytics_data(raw_data, metrics)
+
+            if not records:
+                break
+
+            all_records.extend(records)
+            logger.info(f"Fetched {len(records)} records (offset={offset})")
+
+            if len(records) < limit:
+                break
+
+            offset += limit
+            time.sleep(1)  # Rate limiting
+
+        if not all_records:
+            logger.warning("No Ozon analytics data to upsert")
+            return
+
+        # Filter valid records
+        valid_records = [r for r in all_records if OzonTransformer.validate_record(r)]
+        logger.info(f"Valid records: {len(valid_records)} / {len(all_records)}")
+
+        # Batch upsert
+        batch_size = settings.BATCH_SIZE
+        for i in range(0, len(valid_records), batch_size):
+            supabase.table(settings.OZON_ANALYTICS_TABLE).upsert(
+                valid_records[i : i + batch_size],
+                on_conflict="date,sku"
+            ).execute()
+
+        logger.info(f"✅ Ozon Analytics pipeline completed: {len(valid_records)} records upserted")
+
+    except Exception as e:
+        logger.error(f"Ozon Analytics pipeline failed: {e}", exc_info=True)
+        raise
+
+
+def run_ozon_performance_pipeline(supabase, settings, date_from: date, date_to: date) -> None:
+    """Run Ozon Performance pipeline (advertising stats)"""
+    try:
+        import zipfile
+        import io
+        from src.connectors.ozon_performance import OzonPerformanceConnector
+        from src.etl.ozon_performance_transformer import OzonPerformanceTransformer
+
+        logger.info(f"Starting Ozon Performance pipeline: {date_from} -> {date_to}")
+
+        # Initialize connector
+        connector = OzonPerformanceConnector(
+            client_id=settings.OZON_PERF_CLIENT_ID,
+            client_secret=settings.OZON_PERF_CLIENT_SECRET
+        )
+
+        if not connector.validate_connection():
+            raise OzonConnectorError("Failed to validate Ozon Performance API connection")
+        logger.info("✅ Ozon Performance API connection validated")
+
+        # Fetch all campaigns
+        campaigns_data = connector.fetch_campaigns()
+        all_campaigns = campaigns_data.get("list", [])
+
+        if not all_campaigns:
+            logger.warning("No Ozon campaigns found, skipping performance pipeline")
+            return
+
+        # Filter only active campaigns
+        campaigns = [c for c in all_campaigns if c.get("state") == "CAMPAIGN_STATE_RUNNING"]
+        logger.info(f"Found {len(campaigns)} active campaigns (of {len(all_campaigns)} total)")
+
+        if not campaigns:
+            logger.warning("No active Ozon campaigns, skipping")
+            return
+
+        # Get campaign IDs
+        campaign_ids = [str(c["id"]) for c in campaigns]
+
+        # Process in batches of 10 (API limit)
+        batch_size_api = 10
+        total_records = 0
+
+        for batch_start in range(0, len(campaign_ids), batch_size_api):
+            batch_ids = campaign_ids[batch_start:batch_start + batch_size_api]
+            batch_num = batch_start // batch_size_api + 1
+            total_batches = (len(campaign_ids) + batch_size_api - 1) // batch_size_api
+
+            logger.info(f"Processing batch {batch_num}/{total_batches}: {len(batch_ids)} campaigns")
+
+            try:
+                # Fetch stats for batch
+                report_data = connector.fetch_campaign_product_stats(
+                    campaign_ids=batch_ids,
+                    date_from=date_from.isoformat(),
+                    date_to=date_to.isoformat(),
+                    max_wait_seconds=300,
+                    poll_interval=10
+                )
+
+                # Check if ZIP or CSV
+                is_zip = report_data[:2] == b'PK'
+                all_records = []
+
+                if is_zip:
+                    # Extract and parse each CSV from ZIP
+                    with zipfile.ZipFile(io.BytesIO(report_data)) as zip_file:
+                        csv_files = [f for f in zip_file.namelist() if f.endswith('.csv')]
+                        for csv_filename in csv_files:
+                            csv_data = zip_file.read(csv_filename)
+                            records = OzonPerformanceTransformer.parse_csv_report(csv_data)
+                            all_records.extend(records)
+                else:
+                    # Single CSV
+                    all_records = OzonPerformanceTransformer.parse_csv_report(report_data)
+
+                if not all_records:
+                    logger.info(f"No data in batch {batch_num}")
+                    continue
+
+                # Filter valid records
+                valid_records = [r for r in all_records if OzonPerformanceTransformer.validate_record(r)]
+
+                # Batch upsert to Supabase
+                batch_size_db = settings.BATCH_SIZE
+                for i in range(0, len(valid_records), batch_size_db):
+                    supabase.table(settings.OZON_PERFORMANCE_TABLE).upsert(
+                        valid_records[i : i + batch_size_db],
+                        on_conflict="campaign_id,date,sku"
+                    ).execute()
+
+                total_records += len(valid_records)
+                logger.info(f"Batch {batch_num}: uploaded {len(valid_records)} records")
+
+            except Exception as e:
+                logger.error(f"Failed batch {batch_num}: {e}")
+                continue
+
+        logger.info(f"✅ Ozon Performance pipeline completed: {total_records} records upserted")
+
+    except Exception as e:
+        logger.error(f"Ozon Performance pipeline failed: {e}", exc_info=True)
+        raise
+
+
 def main():
     """Main ETL orchestration function"""
     try:
@@ -386,9 +578,19 @@ def main():
         if settings.RUN_SEARCH_TEXTS:
             run_search_texts_pipeline(supabase, connector, settings, date_to, date_to)
 
-        # Future Ozon pipelines
-        if settings.OZON_ENABLED and settings.RUN_OZON_PRODUCTS:
-            logger.warning("Ozon pipelines coming soon (not implemented yet)")
+        # Ozon Analytics pipeline
+        if settings.RUN_OZON_ANALYTICS:
+            if settings.OZON_API_KEY and settings.OZON_CLIENT_ID:
+                run_ozon_analytics_pipeline(supabase, settings, date_from, date_to)
+            else:
+                logger.warning("Ozon Analytics enabled but OZON_API_KEY/OZON_CLIENT_ID not set")
+
+        # Ozon Performance pipeline
+        if settings.RUN_OZON_PERFORMANCE:
+            if settings.OZON_PERF_CLIENT_ID and settings.OZON_PERF_CLIENT_SECRET:
+                run_ozon_performance_pipeline(supabase, settings, date_from, date_to)
+            else:
+                logger.warning("Ozon Performance enabled but OZON_PERF_CLIENT_ID/OZON_PERF_CLIENT_SECRET not set")
         
         logger.info("=" * 80)
         logger.info("✅ All ETL pipelines completed successfully!")
