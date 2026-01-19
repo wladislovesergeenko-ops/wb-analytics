@@ -1,6 +1,6 @@
 # Core dependencies
 python-dotenv==1.0.1
-supabase==2.3.5
+supabase>=2.10.0
 openai==1.41.0
 
 # Data processing
@@ -11,9 +11,8 @@ numpy>=1.26.0
 pydantic>=2.5.0
 pydantic-settings>=2.1.0
 
-# HTTP client (pinned for supabase 2.3.5 compatibility - requires httpx<0.26)
-httpx==0.25.2
-httpcore==1.0.2
+# HTTP client
+httpx>=0.25.0
 
 # Development (optional)
 pytest==7.4.3
