@@ -2,6 +2,7 @@
 
 from typing import Dict, List, Any
 import pandas as pd
+import numpy as np
 from datetime import datetime
 
 from src.logging_config.logger import setup_logger
@@ -183,10 +184,15 @@ class WBTransformer:
             if not rows:
                 logger.warning("No adverts after filtering by statuses")
                 return pd.DataFrame()
-            
+
             df = pd.DataFrame(rows)
+
+            # Replace inf/-inf with None (JSON doesn't support infinity)
+            df = df.replace([np.inf, -np.inf], None)
+
+            # Replace NaN with None
             df = df.where(pd.notnull(df), None)
-            
+
             logger.info(f"Transformed adverts data: {len(df)} rows")
             return df
         
