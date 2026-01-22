@@ -1,7 +1,12 @@
 """Main ETL entry point with new refactored architecture"""
 
+import math
 import time
 from datetime import date, timedelta
+from typing import Any, Dict, List
+
+import numpy as np
+import pandas as pd
 from supabase import create_client
 
 from src.config.settings import get_settings
@@ -12,6 +17,32 @@ from src.core.exceptions import ETLException, WBConnectorError, OzonConnectorErr
 
 
 logger = setup_logger(__name__)
+
+
+def sanitize_records(records: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """
+    Sanitize records for JSON serialization.
+    Converts NaN, inf, -inf, numpy types to JSON-compatible values.
+    """
+    def sanitize_value(val):
+        if val is None:
+            return None
+        # Handle numpy types first
+        if isinstance(val, (np.integer, np.floating)):
+            val = val.item()
+        # Handle float NaN/inf
+        if isinstance(val, float):
+            if math.isnan(val) or math.isinf(val):
+                return None
+        # Handle pandas NA
+        if pd.isna(val):
+            return None
+        return val
+
+    return [
+        {k: sanitize_value(v) for k, v in record.items()}
+        for record in records
+    ]
 
 
 def run_adverts_settings_pipeline(supabase, connector: WBConnector, settings) -> None:
@@ -36,14 +67,18 @@ def run_adverts_settings_pipeline(supabase, connector: WBConnector, settings) ->
         except Exception as e:
             logger.warning(f"Could not delete old adverts: {e}")
         
-        # Batch insert
-        records = df.to_dict(orient="records")
+        # Deduplicate by (advert_id, nmid) - keep last occurrence
+        df = df.drop_duplicates(subset=["advert_id", "nmid"], keep="last")
+
+        # Batch upsert
+        records = sanitize_records(df.to_dict(orient="records"))
         batch_size = settings.BATCH_SIZE
         for i in range(0, len(records), batch_size):
-            supabase.table(settings.ADVERTS_TABLE).insert(
-                records[i : i + batch_size]
+            supabase.table(settings.ADVERTS_TABLE).upsert(
+                records[i : i + batch_size],
+                on_conflict="advert_id,nmid"
             ).execute()
-        
+
         logger.info(f"✅ Adverts settings pipeline completed: {len(records)} records upserted")
     
     except Exception as e:
@@ -67,7 +102,7 @@ def run_sales_funnel_pipeline(supabase, connector: WBConnector, settings, date_f
                 df = WBTransformer.transform_sales_funnel(raw_data)
                 
                 if not df.empty:
-                    records = df.to_dict(orient="records")
+                    records = sanitize_records(df.to_dict(orient="records"))
                     
                     # Batch upsert
                     batch_size = settings.BATCH_SIZE
@@ -134,7 +169,7 @@ def run_fullstats_pipeline(supabase, connector: WBConnector, settings, date_from
             return
         
         # Batch upsert
-        records = df.to_dict(orient="records")
+        records = sanitize_records(df.to_dict(orient="records"))
         batch_size = settings.BATCH_SIZE
         for i in range(0, len(records), batch_size):
             supabase.table(settings.FULLSTATS_TABLE).upsert(
@@ -165,7 +200,7 @@ def run_spp_pipeline(supabase, connector: WBConnector, settings, date_from: date
                 df = WBTransformer.transform_spp_snapshot(raw_data, current_date.isoformat(), only_not_canceled=True)
 
                 if not df.empty:
-                    records = df.to_dict(orient="records")
+                    records = sanitize_records(df.to_dict(orient="records"))
 
                     # Batch upsert
                     batch_size = settings.BATCH_SIZE
@@ -220,7 +255,7 @@ def run_search_report_pipeline(supabase, connector: WBConnector, settings, date_
                     df = WBTransformer.transform_search_report_groups(groups, date_str, date_str)
 
                     if not df.empty:
-                        records = df.to_dict(orient="records")
+                        records = sanitize_records(df.to_dict(orient="records"))
 
                         # Batch upsert
                         batch_size = settings.BATCH_SIZE
@@ -292,7 +327,7 @@ def run_search_texts_pipeline(supabase, connector: WBConnector, settings, date_f
                     df = WBTransformer.transform_product_search_texts(items, date_str, date_str)
 
                     if not df.empty:
-                        records = df.to_dict(orient="records")
+                        records = sanitize_records(df.to_dict(orient="records"))
 
                         # Batch upsert
                         batch_size = settings.BATCH_SIZE

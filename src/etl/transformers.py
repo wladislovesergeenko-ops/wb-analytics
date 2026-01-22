@@ -92,13 +92,13 @@ class WBTransformer:
             }
             
             df_out = df_out.rename(columns=rename_map)
-            
-            # Convert NaN to None (Supabase requirement)
-            df_out = df_out.where(pd.notnull(df_out), None)
-            
+
             # Lowercase all columns
             df_out.columns = df_out.columns.str.lower()
-            
+
+            # Sanitize NaN/inf values for JSON compliance
+            df_out = WBTransformer._sanitize_dataframe(df_out)
+
             logger.info(f"Transformed sales funnel data: {len(df_out)} rows")
             return df_out
         
@@ -187,11 +187,11 @@ class WBTransformer:
 
             df = pd.DataFrame(rows)
 
-            # Replace inf/-inf with None (JSON doesn't support infinity)
-            df = df.replace([np.inf, -np.inf], None)
+            # Replace inf/-inf with NaN, then NaN with None
+            df = df.replace([np.inf, -np.inf], np.nan)
 
-            # Replace NaN with None
-            df = df.where(pd.notnull(df), None)
+            # Convert to records and sanitize NaN/None for JSON compliance
+            df = WBTransformer._sanitize_dataframe(df)
 
             logger.info(f"Transformed adverts data: {len(df)} rows")
             return df
@@ -264,13 +264,13 @@ class WBTransformer:
             
             # Date normalization
             df["date"] = pd.to_datetime(df["date"], errors="coerce").dt.strftime("%Y-%m-%d")
-            
-            # NaN to None
-            df = df.where(pd.notnull(df), None)
-            
+
             # Lowercase
             df.columns = df.columns.str.lower()
-            
+
+            # Sanitize NaN/inf values for JSON compliance
+            df = WBTransformer._sanitize_dataframe(df)
+
             logger.info(f"Transformed fullstats data: {len(df)} daily records")
             return df
         
@@ -322,8 +322,9 @@ class WBTransformer:
                   .rename(columns={"nmId": "nmid"})
             )
             
-            snap = snap.where(pd.notnull(snap), None)
-            
+            # Sanitize NaN/inf values for JSON compliance
+            snap = WBTransformer._sanitize_dataframe(snap)
+
             logger.info(f"Transformed SPP snapshot for {date_str}: {len(snap)} nmids")
             return snap
         
@@ -351,6 +352,47 @@ class WBTransformer:
             return dt.strftime("%Y-%m-%d")
         except Exception:
             return None
+
+    @staticmethod
+    def _sanitize_dataframe(df: pd.DataFrame) -> pd.DataFrame:
+        """
+        Sanitize dataframe for JSON serialization.
+        Replaces NaN, inf, -inf with None to ensure JSON compliance.
+
+        Args:
+            df: Input dataframe
+
+        Returns:
+            Sanitized dataframe with None instead of NaN/inf values
+        """
+        import math
+
+        def sanitize_value(val):
+            """Convert NaN/inf to None"""
+            if val is None:
+                return None
+            if isinstance(val, float):
+                if math.isnan(val) or math.isinf(val):
+                    return None
+            # Handle numpy types
+            if hasattr(val, 'item'):
+                try:
+                    py_val = val.item()
+                    if isinstance(py_val, float) and (math.isnan(py_val) or math.isinf(py_val)):
+                        return None
+                    return py_val
+                except (ValueError, AttributeError):
+                    pass
+            # Handle pandas NA
+            if pd.isna(val):
+                return None
+            return val
+
+        # Apply sanitization to all values
+        for col in df.columns:
+            df[col] = df[col].apply(sanitize_value)
+
+        return df
 
     # ==================== NEW TRANSFORMERS ====================
 
@@ -393,7 +435,8 @@ class WBTransformer:
             # Add timestamp
             df["updated_at"] = datetime.utcnow().isoformat()
 
-            df = df.where(pd.notnull(df), None)
+            # Sanitize NaN/inf values for JSON compliance
+            df = WBTransformer._sanitize_dataframe(df)
 
             logger.info(f"Transformed commission data: {len(df)} subjects")
             return df
@@ -476,7 +519,9 @@ class WBTransformer:
                 return pd.DataFrame()
 
             df = pd.DataFrame(rows)
-            df = df.where(pd.notnull(df), None)
+
+            # Sanitize NaN/inf values for JSON compliance
+            df = WBTransformer._sanitize_dataframe(df)
 
             logger.info(f"Transformed search report: {len(df)} product rows")
             return df
@@ -556,7 +601,9 @@ class WBTransformer:
                 rows.append(row)
 
             df = pd.DataFrame(rows)
-            df = df.where(pd.notnull(df), None)
+
+            # Sanitize NaN/inf values for JSON compliance
+            df = WBTransformer._sanitize_dataframe(df)
 
             logger.info(f"Transformed search texts: {len(df)} query rows")
             return df
