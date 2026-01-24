@@ -25,6 +25,7 @@ class WBConnector(BaseConnector):
     TARIFFS_COMMISSION_URL = "https://common-api.wildberries.ru/api/v1/tariffs/commission"
     SEARCH_REPORT_URL = "https://seller-analytics-api.wildberries.ru/api/v2/search-report/report"
     SEARCH_TEXTS_URL = "https://seller-analytics-api.wildberries.ru/api/v2/search-report/product/search-texts"
+    NORMQUERY_STATS_URL = "https://advert-api.wildberries.ru/adv/v0/normquery/stats"
     
     def __init__(self, api_key: str, timeout: float = 60.0):
         """
@@ -480,3 +481,110 @@ class WBConnector(BaseConnector):
                 time.sleep(sleep_seconds)
 
         return all_items
+
+    # ==================== NORMQUERY STATS ====================
+
+    @retry_on_exception(exception_types=(httpx.HTTPError,), max_retries=3, delay_seconds=5)
+    def fetch_normquery_stats(
+        self,
+        items: List[Dict[str, int]],
+        date_start: str,
+        date_end: str,
+    ) -> List[Dict[str, Any]]:
+        """
+        Fetch normquery (search cluster) statistics for advert+nm pairs.
+        Rate limit: 5 requests/sec (200ms interval)
+
+        Args:
+            items: List of {"advert_id": int, "nm_id": int} dicts (max 100 per request)
+            date_start: Start date 'YYYY-MM-DD'
+            date_end: End date 'YYYY-MM-DD' (max 31 days from start)
+
+        Returns:
+            List of cluster statistics
+        """
+        if not items:
+            return []
+
+        if len(items) > 100:
+            raise WBConnectorError("fetch_normquery_stats: max 100 items per request")
+
+        headers = self._get_headers()
+        # API expects: from, to, items[{advert_id, nm_id}]
+        payload = {
+            "from": date_start,
+            "to": date_end,
+            "items": items,
+        }
+
+        with httpx.Client(timeout=self.timeout) as client:
+            r = client.post(self.NORMQUERY_STATS_URL, headers=headers, json=payload)
+            r.raise_for_status()
+
+            data = r.json()
+            # API returns: {"stats": [{"advert_id": X, "nm_id": Y, "stats": [...]}, ...]}
+            # We need to flatten the nested structure
+            outer_stats = data.get("stats") or [] if isinstance(data, dict) else []
+
+            # Flatten: extract inner stats and add advert_id/nm_id to each
+            flattened: List[Dict[str, Any]] = []
+            for item in outer_stats:
+                advert_id = item.get("advert_id")
+                nm_id = item.get("nm_id")
+                inner_stats = item.get("stats") or []
+                for cluster in inner_stats:
+                    cluster["advert_id"] = advert_id
+                    cluster["nm_id"] = nm_id
+                    flattened.append(cluster)
+
+            self.log_info(f"Fetched normquery stats: {len(items)} items, {len(flattened)} clusters")
+            return flattened
+
+    def fetch_normquery_stats_chunked(
+        self,
+        items: List[Dict[str, int]],
+        date_start: str,
+        date_end: str,
+        *,
+        chunk_size: int = 100,
+        sleep_seconds: float = 0.25,
+    ) -> List[Dict[str, Any]]:
+        """
+        Fetch normquery stats for many advert+nm pairs with chunking.
+        Rate limit: 5 requests/sec (200ms interval)
+
+        Args:
+            items: List of {"advert_id": int, "nm_id": int} dicts
+            date_start: Start date 'YYYY-MM-DD'
+            date_end: End date 'YYYY-MM-DD'
+            chunk_size: Max items per request (API limit is 100)
+            sleep_seconds: Sleep between requests
+
+        Returns:
+            Combined list of all cluster stats
+        """
+        import time
+
+        if not items:
+            return []
+
+        all_stats: List[Dict[str, Any]] = []
+        chunks = [items[i:i + chunk_size] for i in range(0, len(items), chunk_size)]
+
+        for idx, chunk in enumerate(chunks, start=1):
+            try:
+                stats = self.fetch_normquery_stats(chunk, date_start, date_end)
+                all_stats.extend(stats)
+                self.log_info(
+                    f"Normquery stats chunk {idx}/{len(chunks)}: {len(chunk)} items, {len(stats)} clusters"
+                )
+            except httpx.HTTPStatusError as e:
+                self.log_error(f"Failed to fetch normquery stats chunk {idx}: {e}")
+            except Exception as e:
+                self.log_error(f"Unexpected error in normquery stats chunk {idx}: {e}")
+
+            # Rate limiting
+            if idx < len(chunks):
+                time.sleep(sleep_seconds)
+
+        return all_stats

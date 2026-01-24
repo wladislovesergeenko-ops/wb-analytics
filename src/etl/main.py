@@ -360,6 +360,71 @@ def run_search_texts_pipeline(supabase, connector: WBConnector, settings, date_f
         raise
 
 
+def run_normquery_stats_pipeline(supabase, connector: WBConnector, settings, date_from: date, date_to: date) -> None:
+    """Run normquery stats pipeline (search cluster statistics for ad campaigns)"""
+    try:
+        logger.info(f"Starting Normquery Stats pipeline: {date_from} -> {date_to}")
+
+        # Get active advert_id + nmid pairs from Supabase (status 9 or 11)
+        resp = supabase.table(settings.ADVERTS_TABLE).select("advert_id,nmid").in_(
+            "status",
+            settings.get_fullstats_statuses()
+        ).limit(10000).execute()
+
+        # Build items list for API: [{advert_id, nm_id}, ...]
+        items = []
+        seen = set()
+        for r in (resp.data or []):
+            advert_id = r.get("advert_id")
+            nmid = r.get("nmid")
+            if advert_id and nmid:
+                key = (int(advert_id), int(nmid))
+                if key not in seen:
+                    seen.add(key)
+                    items.append({"advert_id": int(advert_id), "nm_id": int(nmid)})
+
+        if not items:
+            logger.info("No active advert+nm pairs found, skipping normquery stats")
+            return
+
+        logger.info(f"Found {len(items)} advert+nm pairs for normquery stats")
+
+        # Fetch normquery stats with chunking (max 100 items per request)
+        all_stats = connector.fetch_normquery_stats_chunked(
+            items=items,
+            date_start=date_from.isoformat(),
+            date_end=date_to.isoformat(),
+            chunk_size=100,
+            sleep_seconds=settings.NORMQUERY_SLEEP_SECONDS,
+        )
+
+        # Transform
+        df = WBTransformer.transform_normquery_stats(
+            all_stats,
+            date_from.isoformat(),
+            date_to.isoformat()
+        )
+
+        if df.empty:
+            logger.warning("No normquery stats data to upsert")
+            return
+
+        # Batch upsert
+        records = sanitize_records(df.to_dict(orient="records"))
+        batch_size = settings.BATCH_SIZE
+        for i in range(0, len(records), batch_size):
+            supabase.table(settings.NORMQUERY_STATS_TABLE).upsert(
+                records[i : i + batch_size],
+                on_conflict="advert_id,nm_id,date_from,date_to,norm_query"
+            ).execute()
+
+        logger.info(f"✅ Normquery Stats pipeline completed: {len(records)} records upserted")
+
+    except Exception as e:
+        logger.error(f"Normquery Stats pipeline failed: {e}", exc_info=True)
+        raise
+
+
 def run_ozon_analytics_pipeline(supabase, settings, date_from: date, date_to: date) -> None:
     """Run Ozon Analytics pipeline (sales data)"""
     try:
@@ -612,6 +677,10 @@ def main():
         # Search Texts pipeline (depends on Search Report data)
         if settings.RUN_SEARCH_TEXTS:
             run_search_texts_pipeline(supabase, connector, settings, date_to, date_to)
+
+        # Normquery Stats pipeline (search cluster statistics)
+        if settings.RUN_NORMQUERY_STATS:
+            run_normquery_stats_pipeline(supabase, connector, settings, date_from, date_to)
 
         # Ozon Analytics pipeline
         if settings.RUN_OZON_ANALYTICS:

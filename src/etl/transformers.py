@@ -635,3 +635,75 @@ class WBTransformer:
         if isinstance(metric, dict):
             return metric.get("percentile")
         return None
+
+    @staticmethod
+    def transform_normquery_stats(
+        stats: List[Dict[str, Any]],
+        date_from: str,
+        date_to: str,
+    ) -> pd.DataFrame:
+        """
+        Transform normquery stats into flat DataFrame.
+        Result: 1 row per cluster per advert per period.
+
+        Args:
+            stats: List of cluster stats from API
+            date_from: Period start date 'YYYY-MM-DD'
+            date_to: Period end date 'YYYY-MM-DD'
+
+        Returns:
+            Dataframe with cluster statistics per advert
+        """
+        try:
+            if not stats:
+                logger.warning("No normquery stats data to transform")
+                return pd.DataFrame()
+
+            rows: List[Dict[str, Any]] = []
+
+            for item in stats:
+                # API response fields: norm_query, views, clicks, ctr, cpc, cpm, orders, atbs, shks, avg_pos
+                # advert_id and nm_id are added by connector
+                norm_query = item.get("norm_query") or ""
+                row = {
+                    "advert_id": item.get("advert_id"),
+                    "nm_id": item.get("nm_id"),
+                    "date_from": date_from,
+                    "date_to": date_to,
+                    "norm_query": norm_query,
+                    "views": item.get("views"),
+                    "clicks": item.get("clicks"),
+                    "ctr": item.get("ctr"),
+                    "cpc": item.get("cpc"),
+                    "cpm": item.get("cpm"),
+                    "orders": item.get("orders"),
+                    "atbs": item.get("atbs"),
+                    "shks": item.get("shks"),
+                    "avg_pos": item.get("avg_pos"),
+                }
+                rows.append(row)
+
+            df = pd.DataFrame(rows)
+
+            # Ensure norm_query is not empty (required for primary key)
+            df = df[df["norm_query"].notna() & (df["norm_query"] != "")]
+
+            # Type conversions
+            df["advert_id"] = pd.to_numeric(df["advert_id"], errors="coerce")
+            df["nm_id"] = pd.to_numeric(df["nm_id"], errors="coerce")
+            for col in ["views", "clicks", "orders", "atbs", "shks"]:
+                if col in df.columns:
+                    df[col] = pd.to_numeric(df[col], errors="coerce")
+            for col in ["ctr", "cpc", "cpm", "avg_pos"]:
+                if col in df.columns:
+                    df[col] = pd.to_numeric(df[col], errors="coerce")
+
+            # Sanitize NaN/inf values for JSON compliance
+            df = WBTransformer._sanitize_dataframe(df)
+
+            logger.info(f"Transformed normquery stats: {len(df)} cluster rows")
+            return df
+
+        except Exception as e:
+            logger.error(f"Error transforming normquery stats: {e}", exc_info=True)
+            raise TransformationError(f"Normquery stats transformation failed: {e}") from e

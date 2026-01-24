@@ -195,3 +195,50 @@ COMMENT ON COLUMN wb_product_search_texts.open_card_percentile IS 'Перцен�
 -- Товары с лучшей позицией в поиске:
 -- SELECT nm_id, name, avg_position, visibility FROM wb_search_report_products
 -- WHERE period_start = '2026-01-18' ORDER BY avg_position ASC LIMIT 20;
+
+
+-- ============================================================
+-- 4. wb_normquery_stats
+-- Статистика поисковых кластеров рекламных кампаний (ежедневно)
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS wb_normquery_stats (
+    id                  BIGSERIAL,
+    advert_id           INTEGER NOT NULL,              -- ID рекламной кампании
+    nm_id               BIGINT NOT NULL,               -- ID товара (артикул WB)
+    date_from           DATE NOT NULL,                 -- Начало периода
+    date_to             DATE NOT NULL,                 -- Конец периода
+    norm_query          TEXT NOT NULL,                 -- Нормализованный поисковый запрос (кластер)
+    views               INTEGER,                       -- Показы
+    clicks              INTEGER,                       -- Клики
+    ctr                 NUMERIC(10,4),                 -- CTR (%)
+    cpc                 NUMERIC(12,2),                 -- Цена клика (руб.)
+    cpm                 NUMERIC(12,2),                 -- CPM (руб. за 1000 показов)
+    orders              INTEGER,                       -- Заказы
+    atbs                INTEGER,                       -- Добавления в корзину
+    shks                INTEGER,                       -- Отгрузки
+    avg_pos             NUMERIC(10,2),                 -- Средняя позиция
+    created_at          TIMESTAMPTZ DEFAULT NOW(),     -- Время создания записи
+
+    -- Уникальный ключ: кампания + товар + период + запрос
+    PRIMARY KEY (advert_id, nm_id, date_from, date_to, norm_query)
+);
+
+-- Индексы для быстрого поиска
+CREATE INDEX IF NOT EXISTS idx_wb_normquery_stats_date
+    ON wb_normquery_stats(date_from, date_to);
+
+CREATE INDEX IF NOT EXISTS idx_wb_normquery_stats_advert
+    ON wb_normquery_stats(advert_id);
+
+CREATE INDEX IF NOT EXISTS idx_wb_normquery_stats_nmid
+    ON wb_normquery_stats(nm_id);
+
+CREATE INDEX IF NOT EXISTS idx_wb_normquery_stats_query
+    ON wb_normquery_stats USING gin(to_tsvector('russian', norm_query));
+
+-- Комментарии
+COMMENT ON TABLE wb_normquery_stats IS 'Статистика поисковых кластеров рекламных кампаний. Загружается ежедневно.';
+COMMENT ON COLUMN wb_normquery_stats.norm_query IS 'Нормализованный поисковый запрос (кластер)';
+COMMENT ON COLUMN wb_normquery_stats.cpc IS 'Цена за клик в рублях';
+COMMENT ON COLUMN wb_normquery_stats.avg_pos IS 'Средняя позиция в поисковой выдаче';

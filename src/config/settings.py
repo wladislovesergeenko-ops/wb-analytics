@@ -34,6 +34,7 @@ class Settings(BaseSettings):
     RUN_SPP: bool = False
     RUN_SEARCH_REPORT: bool = False
     RUN_SEARCH_TEXTS: bool = False
+    RUN_NORMQUERY_STATS: bool = False
 
     # Runflags / ETL Pipeline Controls - Ozon
     RUN_OZON_ANALYTICS: bool = False
@@ -46,6 +47,7 @@ class Settings(BaseSettings):
     SPP_TABLE: str = "wb_spp_daily"
     SEARCH_REPORT_TABLE: str = "wb_search_report_products"
     SEARCH_TEXTS_TABLE: str = "wb_product_search_texts"
+    NORMQUERY_STATS_TABLE: str = "wb_normquery_stats"
 
     # Table names - Ozon
     OZON_ANALYTICS_TABLE: str = "ozon_analytics_data"
@@ -55,6 +57,7 @@ class Settings(BaseSettings):
     SLEEP_SECONDS: int = 21
     FULLSTATS_SLEEP_SECONDS: int = 15
     FULLSTATS_CHUNK_SIZE: int = 50
+    NORMQUERY_SLEEP_SECONDS: float = 0.25  # 5 req/sec rate limit
     BATCH_SIZE: int = 500
     OVERLAP_DAYS: int = 2
     SPP_OVERLAP_DAYS: int = 1
