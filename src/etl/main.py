@@ -678,9 +678,9 @@ def main():
         if settings.RUN_SEARCH_TEXTS:
             run_search_texts_pipeline(supabase, connector, settings, date_to, date_to)
 
-        # Normquery Stats pipeline (search cluster statistics)
+        # Normquery Stats pipeline (search cluster statistics) - single day only
         if settings.RUN_NORMQUERY_STATS:
-            run_normquery_stats_pipeline(supabase, connector, settings, date_from, date_to)
+            run_normquery_stats_pipeline(supabase, connector, settings, date_to, date_to)
 
         # Ozon Analytics pipeline
         if settings.RUN_OZON_ANALYTICS:
