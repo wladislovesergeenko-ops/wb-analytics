@@ -21,6 +21,10 @@ class OzonPerformanceConnector(BaseConnector):
     TOKEN_URL = f"{BASE_URL}/api/client/token"
     CAMPAIGNS_URL = f"{BASE_URL}/api/client/campaign"
     CAMPAIGN_PRODUCT_STATS_URL = f"{BASE_URL}/api/client/statistics/campaign/product"
+
+    # SKU Promo (Оплата за заказ) endpoints
+    SKU_PROMO_ORDERS_URL = f"{BASE_URL}/api/client/statistic/orders/generate"
+    SKU_PROMO_PRODUCTS_URL = f"{BASE_URL}/api/client/statistic/products/generate"
     
     def __init__(self, client_id: str, client_secret: str, timeout: float = 60.0):
         """
@@ -283,23 +287,199 @@ class OzonPerformanceConnector(BaseConnector):
         else:
             raise OzonConnectorError(f"Unknown endpoint: {endpoint}")
     
+    # ==================== SKU Promo (Оплата за заказ) ====================
+
+    @retry_on_exception(exception_types=(httpx.HTTPError,), max_retries=3, delay_seconds=5)
+    def create_sku_promo_orders_report(
+        self,
+        date_from: str,
+        date_to: str,
+        json_format: bool = True
+    ) -> str:
+        """
+        Create SKU Promo orders report (Оплата за заказ - по заказам)
+
+        Args:
+            date_from: Start date 'YYYY-MM-DD'
+            date_to: End date 'YYYY-MM-DD'
+            json_format: If True, request JSON format
+
+        Returns:
+            Report UUID
+        """
+        headers = self._get_headers()
+
+        # Convert to ISO format with timezone
+        date_from_iso = f"{date_from}T00:00:00Z"
+        date_to_iso = f"{date_to}T23:59:59Z"
+
+        payload = {
+            "from": date_from_iso,
+            "to": date_to_iso
+        }
+
+        url = self.SKU_PROMO_ORDERS_URL
+        if json_format:
+            url = f"{url}/json"
+
+        self.log_info(f"Creating SKU Promo orders report: {date_from} -> {date_to}")
+
+        with httpx.Client(timeout=self.timeout) as client:
+            response = client.post(url, headers=headers, json=payload)
+            response.raise_for_status()
+
+            data = response.json()
+            uuid = data.get("UUID")
+
+            self.log_info(f"SKU Promo orders report created, UUID: {uuid}")
+            return uuid
+
+    @retry_on_exception(exception_types=(httpx.HTTPError,), max_retries=3, delay_seconds=5)
+    def create_sku_promo_products_report(
+        self,
+        date_from: str,
+        date_to: str,
+        json_format: bool = True
+    ) -> str:
+        """
+        Create SKU Promo products report (Оплата за заказ - по товарам)
+
+        Args:
+            date_from: Start date 'YYYY-MM-DD'
+            date_to: End date 'YYYY-MM-DD'
+            json_format: If True, request JSON format
+
+        Returns:
+            Report UUID
+        """
+        headers = self._get_headers()
+
+        date_from_iso = f"{date_from}T00:00:00Z"
+        date_to_iso = f"{date_to}T23:59:59Z"
+
+        payload = {
+            "from": date_from_iso,
+            "to": date_to_iso
+        }
+
+        url = self.SKU_PROMO_PRODUCTS_URL
+        if json_format:
+            url = f"{url}/json"
+
+        self.log_info(f"Creating SKU Promo products report: {date_from} -> {date_to}")
+
+        with httpx.Client(timeout=self.timeout) as client:
+            response = client.post(url, headers=headers, json=payload)
+            response.raise_for_status()
+
+            data = response.json()
+            uuid = data.get("UUID")
+
+            self.log_info(f"SKU Promo products report created, UUID: {uuid}")
+            return uuid
+
+    def fetch_sku_promo_orders(
+        self,
+        date_from: str,
+        date_to: str,
+        max_wait_seconds: int = 300,
+        poll_interval: int = 10
+    ) -> bytes:
+        """
+        Fetch SKU Promo orders report (full async flow)
+
+        Args:
+            date_from: Start date 'YYYY-MM-DD'
+            date_to: End date 'YYYY-MM-DD'
+            max_wait_seconds: Maximum time to wait for report
+            poll_interval: Seconds between status checks
+
+        Returns:
+            Report data (CSV/JSON bytes)
+        """
+        # Step 1: Create report
+        uuid = self.create_sku_promo_orders_report(date_from, date_to)
+
+        # Step 2: Wait for report to be ready
+        start_time = time.time()
+
+        while True:
+            if time.time() - start_time > max_wait_seconds:
+                raise OzonConnectorError(f"SKU Promo orders report {uuid} timeout after {max_wait_seconds}s")
+
+            status_data = self.check_report_status(uuid)
+            state = status_data.get("state", "UNKNOWN")
+
+            self.log_info(f"SKU Promo orders report {uuid} state: {state}")
+
+            if state == "OK":
+                break
+            elif state in ["ERROR", "FAILED"]:
+                raise OzonConnectorError(f"SKU Promo orders report {uuid} failed with state: {state}")
+
+            time.sleep(poll_interval)
+
+        # Step 3: Download report
+        return self.download_report(uuid)
+
+    def fetch_sku_promo_products(
+        self,
+        date_from: str,
+        date_to: str,
+        max_wait_seconds: int = 300,
+        poll_interval: int = 10
+    ) -> bytes:
+        """
+        Fetch SKU Promo products report (full async flow)
+
+        Args:
+            date_from: Start date 'YYYY-MM-DD'
+            date_to: End date 'YYYY-MM-DD'
+            max_wait_seconds: Maximum time to wait for report
+            poll_interval: Seconds between status checks
+
+        Returns:
+            Report data (CSV/JSON bytes)
+        """
+        uuid = self.create_sku_promo_products_report(date_from, date_to)
+
+        start_time = time.time()
+
+        while True:
+            if time.time() - start_time > max_wait_seconds:
+                raise OzonConnectorError(f"SKU Promo products report {uuid} timeout after {max_wait_seconds}s")
+
+            status_data = self.check_report_status(uuid)
+            state = status_data.get("state", "UNKNOWN")
+
+            self.log_info(f"SKU Promo products report {uuid} state: {state}")
+
+            if state == "OK":
+                break
+            elif state in ["ERROR", "FAILED"]:
+                raise OzonConnectorError(f"SKU Promo products report {uuid} failed with state: {state}")
+
+            time.sleep(poll_interval)
+
+        return self.download_report(uuid)
+
     def validate_connection(self) -> bool:
         """
         Validate Performance API connection
-        
+
         Returns:
             True if connection is valid
         """
         try:
             self.log_info("Validating Performance API connection...")
-            
+
             # Try to get token and fetch campaigns
             self._get_access_token()
             self.fetch_campaigns()
-            
+
             self.log_info("Connection validated successfully")
             return True
-            
+
         except Exception as e:
             self.log_error(f"Connection validation failed: {e}", exc_info=True)
             return False

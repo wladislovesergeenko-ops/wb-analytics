@@ -617,6 +617,72 @@ def run_ozon_performance_pipeline(supabase, settings, date_from: date, date_to: 
         raise
 
 
+def run_ozon_sku_promo_pipeline(supabase, settings, date_from: date, date_to: date):
+    """
+    Run Ozon SKU Promo (Оплата за заказ) ETL pipeline
+
+    Fetches orders report from Performance API and aggregates by SKU+date.
+    """
+    from src.connectors.ozon_performance import OzonPerformanceConnector
+    from src.etl.ozon_performance_transformer import OzonSkuPromoTransformer
+
+    try:
+        logger.info(f"Starting Ozon SKU Promo pipeline: {date_from} -> {date_to}")
+
+        # Initialize connector
+        connector = OzonPerformanceConnector(
+            client_id=settings.OZON_PERF_CLIENT_ID,
+            client_secret=settings.OZON_PERF_CLIENT_SECRET
+        )
+
+        # Fetch SKU Promo orders report
+        report_data = connector.fetch_sku_promo_orders(
+            date_from=date_from.isoformat(),
+            date_to=date_to.isoformat(),
+            max_wait_seconds=300,
+            poll_interval=10
+        )
+
+        if not report_data:
+            logger.warning("No SKU Promo data returned")
+            return
+
+        # Parse orders
+        orders = OzonSkuPromoTransformer.parse_orders_report(report_data)
+        logger.info(f"Parsed {len(orders)} SKU Promo orders")
+
+        if not orders:
+            logger.warning("No valid orders parsed")
+            return
+
+        # Aggregate by SKU + date
+        aggregated = OzonSkuPromoTransformer.aggregate_by_sku_date(orders)
+        logger.info(f"Aggregated into {len(aggregated)} SKU+date records")
+
+        if not aggregated:
+            return
+
+        # Filter valid records
+        valid_records = [r for r in aggregated if OzonSkuPromoTransformer.validate_record(r)]
+
+        # Sanitize and upsert
+        records = sanitize_records(valid_records)
+        batch_size = settings.BATCH_SIZE
+
+        for i in range(0, len(records), batch_size):
+            batch = records[i : i + batch_size]
+            supabase.table(settings.OZON_SKU_PROMO_TABLE).upsert(
+                batch,
+                on_conflict="date,sku"
+            ).execute()
+
+        logger.info(f"✅ Ozon SKU Promo pipeline completed: {len(records)} records upserted")
+
+    except Exception as e:
+        logger.error(f"Ozon SKU Promo pipeline failed: {e}", exc_info=True)
+        raise
+
+
 def main():
     """Main ETL orchestration function"""
     try:
@@ -695,7 +761,14 @@ def main():
                 run_ozon_performance_pipeline(supabase, settings, date_from, date_to)
             else:
                 logger.warning("Ozon Performance enabled but OZON_PERF_CLIENT_ID/OZON_PERF_CLIENT_SECRET not set")
-        
+
+        # Ozon SKU Promo pipeline (Оплата за заказ)
+        if settings.RUN_OZON_SKU_PROMO:
+            if settings.OZON_PERF_CLIENT_ID and settings.OZON_PERF_CLIENT_SECRET:
+                run_ozon_sku_promo_pipeline(supabase, settings, date_from, date_to)
+            else:
+                logger.warning("Ozon SKU Promo enabled but OZON_PERF_CLIENT_ID/OZON_PERF_CLIENT_SECRET not set")
+
         logger.info("=" * 80)
         logger.info("✅ All ETL pipelines completed successfully!")
         logger.info("=" * 80)

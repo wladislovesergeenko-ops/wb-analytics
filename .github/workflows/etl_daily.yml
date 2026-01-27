@@ -7,6 +7,7 @@ on:
   workflow_dispatch:
 
 env:
+  # Wildberries pipelines
   RUN_ADVERTS_SETTINGS: "1"
   RUN_ADVERTS_FULLSTATS: "1"
   RUN_SALES_FUNNEL: "1"
@@ -14,6 +15,11 @@ env:
   RUN_SEARCH_REPORT: "1"
   RUN_SEARCH_TEXTS: "1"
   RUN_NORMQUERY_STATS: "1"
+
+  # Ozon pipelines
+  RUN_OZON_ANALYTICS: "1"
+  RUN_OZON_PERFORMANCE: "1"
+  RUN_OZON_SKU_PROMO: "1"
 
   ADVERTS_STATUSES: "7,9,11"
   FULLSTATS_STATUSES: "9,11"
@@ -27,6 +33,11 @@ env:
   SEARCH_TEXTS_TABLE: "wb_product_search_texts"
   NORMQUERY_STATS_TABLE: "wb_normquery_stats"
   NORMQUERY_SLEEP_SECONDS: "0.25"
+
+  # Ozon tables
+  OZON_ANALYTICS_TABLE: "ozon_analytics_data"
+  OZON_PERFORMANCE_TABLE: "ozon_campaign_product_stats"
+  OZON_SKU_PROMO_TABLE: "ozon_sku_promo_stats"
 
 jobs:
   run:
@@ -48,6 +59,10 @@ jobs:
           WB_KEY: ${{ secrets.WB_KEY }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          OZON_API_KEY: ${{ secrets.OZON_API_KEY }}
+          OZON_CLIENT_ID: ${{ secrets.OZON_CLIENT_ID }}
+          OZON_PERF_CLIENT_ID: ${{ secrets.OZON_PERF_CLIENT_ID }}
+          OZON_PERF_CLIENT_SECRET: ${{ secrets.OZON_PERF_CLIENT_SECRET }}
           OVERLAP_DAYS: "2"
           SLEEP_SECONDS: "21"
           SALES_FUNNEL_TABLE: "wb_sales_funnel_products"

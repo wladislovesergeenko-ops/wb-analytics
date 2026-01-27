@@ -39,6 +39,7 @@ class Settings(BaseSettings):
     # Runflags / ETL Pipeline Controls - Ozon
     RUN_OZON_ANALYTICS: bool = False
     RUN_OZON_PERFORMANCE: bool = False
+    RUN_OZON_SKU_PROMO: bool = False
 
     # Table names - Wildberries
     SALES_FUNNEL_TABLE: str = "wb_sales_funnel_products"
@@ -52,6 +53,7 @@ class Settings(BaseSettings):
     # Table names - Ozon
     OZON_ANALYTICS_TABLE: str = "ozon_analytics_data"
     OZON_PERFORMANCE_TABLE: str = "ozon_campaign_product_stats"
+    OZON_SKU_PROMO_TABLE: str = "ozon_sku_promo_stats"
     
     # Timing and batch settings
     SLEEP_SECONDS: int = 21

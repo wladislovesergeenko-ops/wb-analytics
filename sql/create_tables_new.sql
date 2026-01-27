@@ -242,3 +242,38 @@ COMMENT ON TABLE wb_normquery_stats IS 'Статистика поисковых 
 COMMENT ON COLUMN wb_normquery_stats.norm_query IS 'Нормализованный поисковый запрос (кластер)';
 COMMENT ON COLUMN wb_normquery_stats.cpc IS 'Цена за клик в рублях';
 COMMENT ON COLUMN wb_normquery_stats.avg_pos IS 'Средняя позиция в поисковой выдаче';
+
+
+-- ============================================================
+-- 5. ozon_sku_promo_stats
+-- Статистика "Оплата за заказ" Ozon (агрегированная по SKU+дате)
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS ozon_sku_promo_stats (
+    id                  BIGSERIAL,
+    date                DATE NOT NULL,                 -- Дата
+    sku                 TEXT NOT NULL,                 -- SKU товара
+    product_name        TEXT,                          -- Название товара
+    orders              INTEGER DEFAULT 0,             -- Количество заказов
+    quantity            INTEGER DEFAULT 0,             -- Количество единиц
+    revenue             NUMERIC(14,2) DEFAULT 0,       -- Выручка (стоимость заказов)
+    cost                NUMERIC(14,2) DEFAULT 0,       -- Расход на продвижение
+    drr                 NUMERIC(10,2) DEFAULT 0,       -- ДРР (%)
+    fetched_at          TIMESTAMPTZ,                   -- Время загрузки
+    created_at          TIMESTAMPTZ DEFAULT NOW(),     -- Время создания записи
+
+    PRIMARY KEY (date, sku)
+);
+
+-- Индексы
+CREATE INDEX IF NOT EXISTS idx_ozon_sku_promo_stats_date
+    ON ozon_sku_promo_stats(date);
+
+CREATE INDEX IF NOT EXISTS idx_ozon_sku_promo_stats_sku
+    ON ozon_sku_promo_stats(sku);
+
+-- Комментарии
+COMMENT ON TABLE ozon_sku_promo_stats IS 'Статистика "Оплата за заказ" Ozon. Агрегированные данные по SKU и дате.';
+COMMENT ON COLUMN ozon_sku_promo_stats.orders IS 'Количество заказов через "Оплата за заказ"';
+COMMENT ON COLUMN ozon_sku_promo_stats.revenue IS 'Выручка от заказов (стоимость товаров)';
+COMMENT ON COLUMN ozon_sku_promo_stats.cost IS 'Расход на продвижение "Оплата за заказ"';

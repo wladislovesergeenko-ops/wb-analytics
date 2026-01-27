@@ -1,4 +1,27 @@
-"""Ozon data transformers"""
+"""Ozon data transformers
+
+Ozon Analytics API Metrics Reference (ozon_analytics_data table):
+-----------------------------------------------------------------
+revenue              - Выручка (₽)
+ordered_units        - Заказанные единицы (шт)
+delivered_units      - Доставленные единицы (шт)
+
+hits_view_search     - Просмотры из поиска (события)
+hits_view_pdp        - Просмотры карточки товара (события)
+hits_view            - Всего просмотров (события)
+
+hits_tocart_search   - Добавления в корзину из поиска (события)
+hits_tocart_pdp      - Добавления в корзину с карточки (события)
+hits_tocart          - Всего добавлений в корзину (события)
+
+session_view_search  - Уникальные сессии с просмотром из поиска
+session_view_pdp     - Уникальные сессии с просмотром карточки (= КЛИКИ В КАРТОЧКУ)
+session_view         - Всего уникальных сессий с просмотром
+
+position_category    - Позиция в категории
+
+NOTE: session_view_pdp = "клики" в карточку товара (соответствует метрике "Кликов" в сторонних сервисах)
+"""
 
 from typing import List, Dict, Any
 from datetime import datetime
